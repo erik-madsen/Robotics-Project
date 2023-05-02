@@ -1,5 +1,5 @@
 /*
-  A simple Arduino IDE SW using programmed pulsing to control speed
+  An Arduino IDE SW controlling the steering of the Off Road Tracer based on the position relative to a line
 */
 
 // Pin description
@@ -8,12 +8,23 @@ int steeringInB = 30;
 int motionInA   = 40;
 int motionInB   = 41;
 
+int sensorLeftPin  = A0;
+int sensorLeftInput;
+int sensorLeftMin = 1024;
+int sensorLeftMax = 0;
+int sensorLeftLevel = 0;
+
+int sensorRightPin = A1;
+int sensorRightInput;
+int sensorRightMin = 1024;
+int sensorRightMax = 0;
+int sensorRightLevel = 0;
+
 // Motion controlling constants
 int countTurn50degreesFwd = 25;
 int countTurn80degreesBwd = 30;
 int countRampUpAndDown = 10;
-
-int noOfLaps = 2;
+int pwmDurationPct = 20;
 
 void setup()
 {
@@ -68,86 +79,90 @@ void motionBwd()
 
 void loop()
 {
-  int i;
+  static int debugPrescaler = 1;
+  static int pwmPrescaler = 10;
+  static float sensorPosition = 0;
 
-  if (noOfLaps > 0)
+  // Drive forward at low speed
+  
+  if (pwmPrescaler <= pwmDurationPct)
   {
-    noOfLaps--;  
-
-    delay(200);
-
-    Serial.println("Ramp up to full speed driving straight forward");
-    for (i=0; i<countRampUpAndDown; i++)
-    {
-      // Driving
-      motionFwd();
-      delay(20 + i * 80/countRampUpAndDown);
-      motionStop();
-      delay(80 - i * 80/countRampUpAndDown);
-    }
-
-    Serial.println("Driving full speed");
-    motionFwd();
-    delay(1000);
-
-    Serial.println("Ramp down to slow speed driving straight forward");
-    for (i=0; i<countRampUpAndDown; i++)
-    {
-      // Driving
-      motionFwd();
-      delay(100 - i * 80/countRampUpAndDown);
-      motionStop();
-      delay(i * 80/countRampUpAndDown);
-    }
-
-    Serial.println("Stop any possible coasting");
-    motionBwd();
-    delay(20);
+    //motionFwd();
+  }
+  else
+  {
     motionStop();
+  }
 
-    delay(500);
+  pwmPrescaler += 10;
+  if (pwmPrescaler > 100)
+  {
+    pwmPrescaler = 10;
+  }
 
-    Serial.println("Turn approximately 50 degrees right driving slowly forward");
-    steeringRight();
-    delay(200);
-    for (i=0; i<countTurn50degreesFwd; i++)
-    {
-      // Driving
-      motionFwd();
-      delay(20);
-      motionStop();
-      delay(80);
-    }
+  // Determine position relative to the line
+  
+  sensorLeftInput  = analogRead(sensorLeftPin);
+  if (sensorLeftInput < sensorLeftMin) sensorLeftMin = sensorLeftInput;
+  if (sensorLeftInput > sensorLeftMax) sensorLeftMax = sensorLeftInput;
+  sensorLeftLevel = 0;
+  if (sensorLeftInput > (sensorLeftMax+sensorLeftMin)/2) sensorLeftLevel = 1;
 
-    delay(500);
+  sensorRightInput = analogRead(sensorRightPin);
+  if (sensorRightInput < sensorRightMin) sensorRightMin = sensorRightInput;
+  if (sensorRightInput > sensorRightMax) sensorRightMax = sensorRightInput;
+  sensorRightLevel = 0;
+  if (sensorRightInput > (sensorRightMax+sensorRightMin)/2) sensorRightLevel = 1;
 
-    Serial.println("Turn approximately 80 degrees left driving slowly backward");
+  sensorPosition = sensorLeftLevel * (-0.5) + sensorRightLevel * 0.5;
+
+  if (debugPrescaler++ == 200)
+  {
+    debugPrescaler = 1;
+
+    Serial.print(" Max:  ");
+    Serial.print(sensorLeftMax);
+    Serial.print("   - ");
+    Serial.print(sensorRightMax);
+    Serial.println();
+  
+    Serial.print("       ");
+    Serial.print(sensorLeftInput);
+    Serial.print(":");
+    Serial.print(sensorLeftLevel);
+    Serial.print(" - ");
+    Serial.print(sensorRightInput);
+    Serial.print(":");
+    Serial.print(sensorRightLevel);
+    Serial.print("  => pos: ");
+    Serial.print(sensorPosition);
+    Serial.println();
+  
+    Serial.print(" Min:  ");
+    Serial.print(sensorLeftMin);
+    Serial.print("   - ");
+    Serial.print(sensorRightMin);
+    Serial.println();
+  
+    Serial.println();
+  }
+
+  // Control the steering
+  
+  if (sensorPosition > 0.0)
+  {
     steeringLeft();
-    delay(200);
-    for (i=0; i<countTurn80degreesBwd; i++)
-    {
-      // Driving
-      motionBwd();
-      delay(20);
-      motionStop();
-      delay(80);
-    }
-
-    delay(500);
-
-    Serial.println("Turn approximately 50 degrees right driving slowly forward");
+  }
+  else if (sensorPosition < 0.0)
+  {
     steeringRight();
-    delay(200);
-    for (i=0; i<countTurn50degreesFwd; i++)
-    {
-      // Driving
-      motionFwd();
-      delay(20);
-      motionStop();
-      delay(80);
-    }
-
+  }
+  else
+  {
     steeringStraight();
   }
 
+  // Delay to provide some timing of the process
+
+  delay(10);
 }
