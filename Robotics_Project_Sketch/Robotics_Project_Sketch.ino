@@ -1,168 +1,136 @@
 /*
-  An Arduino IDE SW controlling the steering of the Off Road Tracer based on the position relative to a line
+  An Arduino IDE SW for experimenting with the line tracking module
 */
 
-// Pin description
-int steeringInA = 31;
-int steeringInB = 30;
-int motionInA   = 40;
-int motionInB   = 41;
+#define NO_OF_SENSORS 5
+#define ADC_RANGE 1024
 
-int sensorLeftPin  = A0;
-int sensorLeftInput;
-int sensorLeftMin = 1024;
-int sensorLeftMax = 0;
-int sensorLeftLevel = 0;
+typedef struct
+{
+  unsigned pinNo;
+  float    minValue;
+  float    maxValue;
+  float    sensorLevel;
+  float    sensorScaling;
+  unsigned logicalLevel;
+}
+ts_sensor;
 
-int sensorRightPin = A1;
-int sensorRightInput;
-int sensorRightMin = 1024;
-int sensorRightMax = 0;
-int sensorRightLevel = 0;
+ts_sensor sensor[NO_OF_SENSORS];
 
-// Motion controlling constants
-int countTurn50degreesFwd = 25;
-int countTurn80degreesBwd = 30;
-int countRampUpAndDown = 10;
-int pwmDurationPct = 20;
+float rightEdgePosition = 0.0;
+float leftEdgePosition  = 0.0;
+float positionValue[NO_OF_SENSORS+1] = {0.5, 0.2, 0.1, -0.1, -0.2, -0.5};
+
 
 void setup()
 {
-  pinMode(steeringInA, OUTPUT);
-  pinMode(steeringInB, OUTPUT);
-  pinMode(motionInA,   OUTPUT);
-  pinMode(motionInB,   OUTPUT);
-
-  motionStop();
-  steeringStraight();
-  delay(500);
-
   Serial.begin(9600);
   while (!Serial);
-}
 
-void steeringStraight()
-{
-  digitalWrite(steeringInA, LOW);
-  digitalWrite(steeringInB, LOW);
-}
+  sensor[0].pinNo = A0;
+  sensor[1].pinNo = A1;
+  sensor[2].pinNo = A2;
+  sensor[3].pinNo = A3;
+  sensor[4].pinNo = A4;
 
-void steeringRight()
-{
-  digitalWrite(steeringInA, HIGH);
-  digitalWrite(steeringInB, LOW);
-}
+  sensor[0].minValue = 1.0;
+  sensor[1].minValue = 1.0;
+  sensor[2].minValue = 1.0;
+  sensor[3].minValue = 1.0;
+  sensor[4].minValue = 1.0;
 
-void steeringLeft()
-{
-  digitalWrite(steeringInA, LOW);
-  digitalWrite(steeringInB, HIGH);
-}
+  sensor[0].maxValue = 0.0;
+  sensor[1].maxValue = 0.0;
+  sensor[2].maxValue = 0.0;
+  sensor[3].maxValue = 0.0;
+  sensor[4].maxValue = 0.0;
 
-void motionStop()
-{
-  digitalWrite(motionInA, LOW);
-  digitalWrite(motionInB, LOW);
-}
-
-void motionFwd()
-{
-  digitalWrite(motionInA, LOW);
-  digitalWrite(motionInB, HIGH);
-}
-
-void motionBwd()
-{
-  digitalWrite(motionInA, HIGH);
-  digitalWrite(motionInB, LOW);
+  sensor[0].sensorScaling = 30.0 / 28.0;
+  sensor[1].sensorScaling = 30.0 / 24.0;
+  sensor[2].sensorScaling = 30.0 / 35.0;
+  sensor[3].sensorScaling = 30.0 / 23.0;
+  sensor[4].sensorScaling = 30.0 / 28.0;
 }
 
 void loop()
 {
-  static int debugPrescaler = 1;
-  static int pwmPrescaler = 10;
-  static float sensorPosition = 0;
+  int i;
 
-  // Drive forward at low speed
+  // Read sensors and determine their levels
   
-  if (pwmPrescaler <= pwmDurationPct)
+  for (i=0; i<NO_OF_SENSORS; i++)
   {
-    //motionFwd();
-  }
-  else
-  {
-    motionStop();
-  }
+    sensor[i].sensorLevel = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
 
-  pwmPrescaler += 10;
-  if (pwmPrescaler > 100)
-  {
-    pwmPrescaler = 10;
+    if (sensor[i].sensorLevel < sensor[i].minValue) sensor[i].minValue = sensor[i].sensorLevel;
+    if (sensor[i].sensorLevel > sensor[i].maxValue) sensor[i].maxValue = sensor[i].sensorLevel;
+
+    if (sensor[i].sensorLevel > (sensor[i].maxValue + sensor[i].minValue) / 2.0)
+      sensor[i].logicalLevel = 1;
+    else
+      sensor[i].logicalLevel = 0;
   }
 
-  // Determine position relative to the line
-  
-  sensorLeftInput  = analogRead(sensorLeftPin);
-  if (sensorLeftInput < sensorLeftMin) sensorLeftMin = sensorLeftInput;
-  if (sensorLeftInput > sensorLeftMax) sensorLeftMax = sensorLeftInput;
-  sensorLeftLevel = 0;
-  if (sensorLeftInput > (sensorLeftMax+sensorLeftMin)/2) sensorLeftLevel = 1;
+  // Determine the position of the line's right edge and set the position value
 
-  sensorRightInput = analogRead(sensorRightPin);
-  if (sensorRightInput < sensorRightMin) sensorRightMin = sensorRightInput;
-  if (sensorRightInput > sensorRightMax) sensorRightMax = sensorRightInput;
-  sensorRightLevel = 0;
-  if (sensorRightInput > (sensorRightMax+sensorRightMin)/2) sensorRightLevel = 1;
-
-  sensorPosition = sensorLeftLevel * (-0.5) + sensorRightLevel * 0.5;
-
-  if (debugPrescaler++ == 200)
+  for (i=NO_OF_SENSORS-1; i>=0; i--)
   {
-    debugPrescaler = 1;
+    rightEdgePosition = positionValue[i+1];
+    if (sensor[i].logicalLevel == 1)
+    {
+      break;
+    }
+    rightEdgePosition = positionValue[i];
+  }
 
-    Serial.print(" Max:  ");
-    Serial.print(sensorLeftMax);
-    Serial.print("   - ");
-    Serial.print(sensorRightMax);
-    Serial.println();
-  
-    Serial.print("       ");
-    Serial.print(sensorLeftInput);
+  // Determine the position of the line's left edge and set the position value
+
+  for (i=0; i<=NO_OF_SENSORS-1; i++)
+  {
+    leftEdgePosition = positionValue[i];
+    if (sensor[i].logicalLevel == 1)
+    {
+      break;
+    }
+    leftEdgePosition = positionValue[i+1];
+  }
+
+  // Dump debug information
+
+  Serial.print(" Max:    ");
+  for (i=0; i<NO_OF_SENSORS; i++)
+  {
+    Serial.print(sensor[i].maxValue);
+    Serial.print("    ");
+  }
+  Serial.println();
+
+  Serial.print(" Value:  ");
+  for (i=0; i<NO_OF_SENSORS; i++)
+  {
+    Serial.print(sensor[i].sensorLevel);
     Serial.print(":");
-    Serial.print(sensorLeftLevel);
-    Serial.print(" - ");
-    Serial.print(sensorRightInput);
-    Serial.print(":");
-    Serial.print(sensorRightLevel);
-    Serial.print("  => pos: ");
-    Serial.print(sensorPosition);
-    Serial.println();
-  
-    Serial.print(" Min:  ");
-    Serial.print(sensorLeftMin);
-    Serial.print("   - ");
-    Serial.print(sensorRightMin);
-    Serial.println();
-  
-    Serial.println();
+    Serial.print(sensor[i].logicalLevel);
+    Serial.print("  ");
   }
+  Serial.println();
 
-  // Control the steering
-  
-  if (sensorPosition > 0.0)
+  Serial.print(" Min:    ");
+  for (i=0; i<NO_OF_SENSORS; i++)
   {
-    steeringLeft();
+    Serial.print(sensor[i].minValue);
+    Serial.print("    ");
   }
-  else if (sensorPosition < 0.0)
-  {
-    steeringRight();
-  }
-  else
-  {
-    steeringStraight();
-  }
+  Serial.println();
 
-  // Delay to provide some timing of the process
+  Serial.print(" Pos:    ");
+  Serial.print(leftEdgePosition);
+  Serial.print("  ");
+  Serial.print(rightEdgePosition);
+  Serial.println();
 
-  delay(10);
+  Serial.println();
+
+  delay(2000);
 }
