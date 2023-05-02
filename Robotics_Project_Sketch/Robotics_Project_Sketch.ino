@@ -4,13 +4,15 @@
 
 #define NO_OF_SENSORS 5
 #define ADC_RANGE 1024
+#define PWM_RANGE 256
+#define HP_FILTER_FACTOR 0.5
 
 typedef struct
 {
   unsigned pinNo;
-  float    minValue;
-  float    maxValue;
-  float    sensorLevel;
+  float    inputValue;
+  float    previousInputValue;
+  float    sensorSignal;
   float    sensorScaling;
   unsigned logicalLevel;
 }
@@ -20,11 +22,14 @@ ts_sensor sensor[NO_OF_SENSORS];
 
 float rightEdgePosition = 0.0;
 float leftEdgePosition  = 0.0;
-float positionValue[NO_OF_SENSORS+1] = {0.5, 0.2, 0.1, -0.1, -0.2, -0.5};
+float    positionValue[NO_OF_SENSORS+1] = {0.5, 0.3, 0.1, -0.1, -0.3, -0.5};
 
+int debugPrescaler = 0;
 
 void setup()
 {
+  int i;
+
   Serial.begin(9600);
   while (!Serial);
 
@@ -34,41 +39,36 @@ void setup()
   sensor[3].pinNo = A3;
   sensor[4].pinNo = A4;
 
-  sensor[0].minValue = 1.0;
-  sensor[1].minValue = 1.0;
-  sensor[2].minValue = 1.0;
-  sensor[3].minValue = 1.0;
-  sensor[4].minValue = 1.0;
+  sensor[0].sensorScaling = 35.0 / 28.0;
+  sensor[1].sensorScaling = 35.0 / 20.0;
+  sensor[2].sensorScaling = 35.0 / 37.0;
+  sensor[3].sensorScaling = 35.0 / 28.0;
+  sensor[4].sensorScaling = 35.0 / 29.0;
 
-  sensor[0].maxValue = 0.0;
-  sensor[1].maxValue = 0.0;
-  sensor[2].maxValue = 0.0;
-  sensor[3].maxValue = 0.0;
-  sensor[4].maxValue = 0.0;
-
-  sensor[0].sensorScaling = 30.0 / 28.0;
-  sensor[1].sensorScaling = 30.0 / 24.0;
-  sensor[2].sensorScaling = 30.0 / 35.0;
-  sensor[3].sensorScaling = 30.0 / 23.0;
-  sensor[4].sensorScaling = 30.0 / 28.0;
+  for (i=0; i<NO_OF_SENSORS; i++)
+  {
+    sensor[i].inputValue = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
+  }
 }
 
 void loop()
 {
   int i;
+  float inputValue;
 
   // Read sensors and determine their levels
   
   for (i=0; i<NO_OF_SENSORS; i++)
   {
-    sensor[i].sensorLevel = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
+    sensor[i].previousInputValue = sensor[i].inputValue;
+    sensor[i].inputValue = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
 
-    if (sensor[i].sensorLevel < sensor[i].minValue) sensor[i].minValue = sensor[i].sensorLevel;
-    if (sensor[i].sensorLevel > sensor[i].maxValue) sensor[i].maxValue = sensor[i].sensorLevel;
+    sensor[i].sensorSignal =
+      (HP_FILTER_FACTOR * sensor[i].sensorSignal) + (sensor[i].inputValue - sensor[i].previousInputValue);
 
-    if (sensor[i].sensorLevel > (sensor[i].maxValue + sensor[i].minValue) / 2.0)
+    if (sensor[i].sensorSignal > 0.02)
       sensor[i].logicalLevel = 1;
-    else
+    if (sensor[i].sensorSignal < -0.02)
       sensor[i].logicalLevel = 0;
   }
 
@@ -98,39 +98,44 @@ void loop()
 
   // Dump debug information
 
-  Serial.print(" Max:    ");
-  for (i=0; i<NO_OF_SENSORS; i++)
+  /* if (debugPrescaler++ >= 20) */
   {
-    Serial.print(sensor[i].maxValue);
-    Serial.print("    ");
-  }
-  Serial.println();
+    debugPrescaler = 0;
 
-  Serial.print(" Value:  ");
-  for (i=0; i<NO_OF_SENSORS; i++)
-  {
-    Serial.print(sensor[i].sensorLevel);
-    Serial.print(":");
-    Serial.print(sensor[i].logicalLevel);
+    Serial.print(" Input:  ");
+    for (i=0; i<NO_OF_SENSORS; i++)
+    {
+      Serial.print(sensor[i].inputValue);
+      Serial.print("     ");
+    }
+    Serial.println();
+
+    Serial.print(" Prev.:  ");
+    for (i=0; i<NO_OF_SENSORS; i++)
+    {
+      Serial.print(sensor[i].previousInputValue);
+      Serial.print("     ");
+    }
+    Serial.println();
+
+    Serial.print(" Signal: ");
+    for (i=0; i<NO_OF_SENSORS; i++)
+    {
+      Serial.print(sensor[i].sensorSignal);
+      Serial.print(":");
+      Serial.print(sensor[i].logicalLevel);
+      Serial.print("  ");
+    }
+    Serial.println();
+
+    Serial.print(" Pos:    ");
+    Serial.print(leftEdgePosition);
     Serial.print("  ");
+    Serial.print(rightEdgePosition);
+    Serial.println();
+  
+    Serial.println();
   }
-  Serial.println();
-
-  Serial.print(" Min:    ");
-  for (i=0; i<NO_OF_SENSORS; i++)
-  {
-    Serial.print(sensor[i].minValue);
-    Serial.print("    ");
-  }
-  Serial.println();
-
-  Serial.print(" Pos:    ");
-  Serial.print(leftEdgePosition);
-  Serial.print("  ");
-  Serial.print(rightEdgePosition);
-  Serial.println();
-
-  Serial.println();
-
+  
   delay(2000);
 }
