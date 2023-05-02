@@ -2,157 +2,106 @@
   An Arduino IDE SW for experimenting with the line tracking module controlling the steering
 */
 
-#include "Common.h"
 #include "HwWrap.h"
 #include "LineTracker.h"
 #include "PIDregulator.h"
 
+LineTracker tracker;
+PIDregulator PID;
+HwWrap HwApp;
+
 float PIDoutput;
-
 int debugPrescaler = 0;
-
-/* Pin description */
-
-int steeringInA = 2;
-int steeringInB = 3;
-int motionInA   = 40;
-int motionInB   = 41;
-
 
 void setup()
 {
   Serial.begin(9600);
   while (!Serial);
 
-  LineTracker_Init();
+  tracker.Init();
 
-  PID_constructor();
-  PID_SetRangeToIncludeMinusOne(1);
-  PID_SetKp(1.8);
-  PID_SetKi(0.0);
-  PID_Init();
+  PID.SetRangeToIncludeMinusOne(1);
+  PID.SetKp(3.0); // 2.6
+  PID.SetKi(0.0); // 0.0
+  PID.SetKd(1.0); // 6.0
+  PID.Init();
 }
-
-
-unsigned HwWrap_AnalogInput(unsigned inputNo)
-{
-  unsigned value;
-
-  switch (inputNo)
-  {
-    case 0:
-      value = analogRead(A0);
-      break;
-    case 1:
-      value = analogRead(A1);
-      break;
-    case 2:
-      value = analogRead(A2);
-      break;
-    case 3:
-      value = analogRead(A3);
-      break;
-    case 4:
-      value = analogRead(A4);
-      break;
-  }
-}
-
-void HwWrap_MotionStop()
-{
-  digitalWrite(motionInA, LOW);
-  digitalWrite(motionInB, LOW);
-}
-
-void HwWrap_MotionFwd()
-{
-  digitalWrite(motionInA, LOW);
-  digitalWrite(motionInB, HIGH);
-}
-
-void HwWrap_MotionBwd()
-{
-  digitalWrite(motionInA, HIGH);
-  digitalWrite(motionInB, LOW);
-}
-
-
-void HwWrap_DebugString(char *string)
-{
-  Serial.print(string);
-}
-
-void HwWrap_DebugUnsigned(unsigned value)
-{
-  Serial.print(value);
-}
-
-void HwWrap_DebugFloat(float value)
-{
-  Serial.print(value);
-}
-
-void HwWrap_DebugNewLine()
-{
-  Serial.println();
-}
-
 
 void loop()
 {
-  t_boolean lineDetected;
+  lineEdgeState lineState;
   float position;
 
-  LineTracker_Update(&lineDetected, &position);
+  /* Control steering using the line tracker and a PID regulator */
 
-  if (lineDetected)
+  tracker.Update(&lineState, &position);
+
+  switch (lineState)
   {
-    /* Control steering using PID regulator */
-  
-    PIDoutput = PID_Update(0.0 - position);
-  
-    if (PIDoutput > 0.0)
+    case lineEdgeState_TRACKED:
+    case lineEdgeState_TRACKED_AT_FAR_RIGHT_SENSOR:
+    case lineEdgeState_TRACKED_AT_FAR_LEFT_SENSOR:
+    case lineEdgeState_LOST_TO_THE_RIGHT:
+    case lineEdgeState_LOST_TO_THE_LEFT:
     {
-      analogWrite(steeringInA, PIDoutput * (PWM_RANGE-1));
-      analogWrite(steeringInB, 0.0);
     }
-    else if (PIDoutput < -0.0)
+    break;
+
+    case lineEdgeState_LOST:
+    case lineEdgeState_UNDEFINED:
     {
-      analogWrite(steeringInA, 0.0);
-      analogWrite(steeringInB, (-PIDoutput) * (PWM_RANGE-1));
+      position = 0.0;
     }
-    else
-    {
-      analogWrite(steeringInA, 0.0);
-      analogWrite(steeringInB, 0.0);
-    }
+
+  }
+
+  PIDoutput = PID.Update(0.0 - position);
+
+  if (PIDoutput > 0.0)
+  {
+    analogWrite(steeringInA, PIDoutput * PWM_GAIN * (PWM_RANGE-1));
+    analogWrite(steeringInB, 0.0);
+  }
+  else if (PIDoutput < -0.0)
+  {
+    analogWrite(steeringInA, 0.0);
+    analogWrite(steeringInB, (-PIDoutput) * PWM_GAIN * (PWM_RANGE-1));
   }
   else
   {
-    /* The line is lost; just continue in the same direction */
+    analogWrite(steeringInA, 0.0);
+    analogWrite(steeringInB, 0.0);
   }
+
+
+#define DEBUG_MODE 1
 
   /* Dump debug information */
 
-  if (debugPrescaler++ >= 20)
+#if DEBUG_MODE==1
+  if (++debugPrescaler >= 20)
+#elif DEBUG_MODE==2
+  if (++debugPrescaler >= 20)
+#else
+  if (++debugPrescaler >= 1)
+#endif
   {
     debugPrescaler = 0;
-
-    LineTracker_DebugInfo();
-
-    Serial.print(" PID:    ");
-    Serial.print(PIDoutput);
-    Serial.println();
-
+    tracker.DebugInfo();
+    PID.DebugInfo();
     Serial.println();
   }
 
   /* Driving */
 
-  HwWrap_MotionFwd();
-  delay(20);
-  HwWrap_MotionStop();
-  delay(80);
-
-  /* delay(100); */
+#if DEBUG_MODE==1
+  HwApp.MotionFwd();
+  delay(15);
+  HwApp.MotionStop();
+  delay(85);
+#elif DEBUG_MODE==2
+  delay(100);
+#else
+  delay(2000);
+#endif
 }
