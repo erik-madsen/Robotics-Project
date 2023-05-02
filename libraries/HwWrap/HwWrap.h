@@ -11,11 +11,11 @@
 
 #define NO_OF_SENSORS 5
 
-#define LOGICAL_INPUT_0 0
-#define LOGICAL_INPUT_1 1
-#define LOGICAL_INPUT_2 2
-#define LOGICAL_INPUT_3 3
-#define LOGICAL_INPUT_4 4
+#define ANALOG_INPUT_0 0
+#define ANALOG_INPUT_1 1
+#define ANALOG_INPUT_2 2
+#define ANALOG_INPUT_3 3
+#define ANALOG_INPUT_4 4
 
 #define ADC_RANGE 1024
 #define PWM_RANGE 256

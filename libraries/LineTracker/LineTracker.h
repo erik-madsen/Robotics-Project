@@ -45,9 +45,6 @@ class LineTracker
 
         ts_sensor sensor[NO_OF_SENSORS];
 
-        float inputMax;
-        float inputMin;
-
         float mass     = 0.0;
         float torque   = 0.0;
         float centroid = 0.0;

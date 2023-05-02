@@ -4,14 +4,15 @@
     Responsibility:
     Control the steering wheels of the veichle based on a requested steering amount.
     The driver is assumed to use DOs controlling a pair of rather slowly reacting steering wheels.
-    Hence the control is performing a "programmed PWM" with 10 differnt duty cycles.
+    Hence the control is performing a "programmed PWM" with NO_OF_DUTY_CYCLES possible duty cycles.
 */
 
 #include "WheelSteering.h"
 #include "Debug.h"
 #include "HwWrap.h"
+#include "math.h"
 
-#define NO_OF_DUTY_CYCLES 10.0f
+#define NO_OF_DUTY_CYCLES 5.0f
 
 WheelSteering::WheelSteering
 //  --------------------------------------------------------------------------------
@@ -45,12 +46,13 @@ void WheelSteering::Update
 )
 //  --------------------------------------------------------------------------------
 {
-    // Control the "PWM periods
+    // Control the "PWM periods"
 
     if (timeSlot++ >= unsigned(NO_OF_DUTY_CYCLES))
     {
         timeSlot = 1;
-        steeringSignalInUse = steeringSignalRequested;
+
+        steeringSignalInUse = float( round(steeringSignalRequested * NO_OF_DUTY_CYCLES) ) / NO_OF_DUTY_CYCLES;
 
         if (steeringSignalInUse >= (1.0f / NO_OF_DUTY_CYCLES))
         {
@@ -72,7 +74,7 @@ void WheelSteering::Update
         }
     }
 
-    // Control the "PWM duty cycle
+    // Control the "PWM duty cycle"
 
     switch (currentDirection)
     {
@@ -124,28 +126,36 @@ void WheelSteering::DebugInfo
 //  --------------------------------------------------------------------------------
 {
     if (timeSlot == 1)
+    {
         HwWrap::GetInstance()->DebugString(" Steering: ");
+        if (steeringSignalInUse >= 0.0f)
+            HwWrap::GetInstance()->DebugString(" ");
+        HwWrap::GetInstance()->DebugFloat(steeringSignalRequested);
+
+        HwWrap::GetInstance()->DebugString(" -> ");
+        if (steeringSignalInUse >= 0.0f)
+            HwWrap::GetInstance()->DebugString(" ");
+        HwWrap::GetInstance()->DebugFloat(steeringSignalInUse);
+    }
     else
-        HwWrap::GetInstance()->DebugString("           ");
+    {
+        HwWrap::GetInstance()->DebugString("                         ");
+    }
 
-    if (steeringSignalInUse >= 0.0f)
-        HwWrap::GetInstance()->DebugString(" ");
-    HwWrap::GetInstance()->DebugFloat(steeringSignalInUse);
-    HwWrap::GetInstance()->DebugString("                   ");
-
-    if (currentWheelPos == steeringDirection_STRAIGHT)
-        HwWrap::GetInstance()->DebugString("|| ***** ||");
-    else if (currentWheelPos == steeringDirection_LEFT)
-        HwWrap::GetInstance()->DebugString("\\\\ ***** \\\\");
-    else if (currentWheelPos == steeringDirection_RIGHT)
-        HwWrap::GetInstance()->DebugString("// ***** //");
-
+    HwWrap::GetInstance()->DebugString("  ");
     if (timeSlot < 10)
         HwWrap::GetInstance()->DebugString(" ");
-    HwWrap::GetInstance()->DebugString("  ");
     HwWrap::GetInstance()->DebugUnsigned(timeSlot);
     HwWrap::GetInstance()->DebugString("  ");
     HwWrap::GetInstance()->DebugFloat(float(timeSlot) / NO_OF_DUTY_CYCLES);
+
+    HwWrap::GetInstance()->DebugString("   ");
+    if (currentWheelPos == steeringDirection_STRAIGHT)
+        HwWrap::GetInstance()->DebugString("|| ----- ||");
+    else if (currentWheelPos == steeringDirection_LEFT)
+        HwWrap::GetInstance()->DebugString("\\\\ ----- \\\\");
+    else if (currentWheelPos == steeringDirection_RIGHT)
+        HwWrap::GetInstance()->DebugString("// ----- //");
 
     HwWrap::GetInstance()->DebugNewLine();
 }

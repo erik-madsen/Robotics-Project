@@ -9,6 +9,7 @@
 #include "LineTracker.h"
 #include "Debug.h"
 #include "HwWrap.h"
+#include "math.h"
 
 LineTracker::LineTracker
 //  --------------------------------------------------------------------------------
@@ -28,11 +29,11 @@ void LineTracker::Init
 {
     int i;
 
-    sensor[0].pinNo = LOGICAL_INPUT_0;
-    sensor[1].pinNo = LOGICAL_INPUT_1;
-    sensor[2].pinNo = LOGICAL_INPUT_2;
-    sensor[3].pinNo = LOGICAL_INPUT_3;
-    sensor[4].pinNo = LOGICAL_INPUT_4;
+    sensor[0].pinNo = ANALOG_INPUT_0;
+    sensor[1].pinNo = ANALOG_INPUT_1;
+    sensor[2].pinNo = ANALOG_INPUT_2;
+    sensor[3].pinNo = ANALOG_INPUT_3;
+    sensor[4].pinNo = ANALOG_INPUT_4;
 
     sensor[0].sensorBias = 0.09;
     sensor[1].sensorBias = 0.04;
@@ -57,11 +58,19 @@ void LineTracker::Update
 {
     unsigned i;
 
+#define CENTROID_VALUE_OF_ONE_SENSOR_POSITION   (0.5)
+
+#define CENTROID_VALUE_OF_LEFTMOST_SENSOR       (1.0)
+#define CENTROID_VALUE_OF_RIGHTMOST_SENSOR      ((float)(NO_OF_SENSORS))
+
+#define CENTROID_VALUE_OUTSIDE_LEFT             (CENTROID_VALUE_OF_LEFTMOST_SENSOR - CENTROID_VALUE_OF_ONE_SENSOR_POSITION)
+#define CENTROID_VALUE_OUTSIDE_RIGHT            (CENTROID_VALUE_OF_RIGHTMOST_SENSOR + CENTROID_VALUE_OF_ONE_SENSOR_POSITION)
+
+#define CENTROID_VALUE_CENTER                   ((float)(NO_OF_SENSORS+1) / 2)
+
     // Read sensor inputs, and
     // determine min and max values
 
-    inputMax = 0.0;
-    inputMin = 1.0;
     mass   = 0.0;
     torque = 0.0;
 
@@ -76,12 +85,6 @@ void LineTracker::Update
 #ifdef SIM_LINE_TRACKER
     SimulateInputs();
 #endif
-
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-        if (sensor[i].inputValue > inputMax) inputMax = sensor[i].inputValue;
-        if (sensor[i].inputValue < inputMin) inputMin = sensor[i].inputValue;
-    }
 
     // Find the "mass" and "torque" of the histogram
 
@@ -100,12 +103,12 @@ void LineTracker::Update
     }
     else
     {
-        centroid = 0.0;
+        centroid = CENTROID_VALUE_CENTER;
     }
 
-    if ((inputMax - inputMin) < 0.08)
+    if ( fabs( centroid - CENTROID_VALUE_CENTER ) < (CENTROID_VALUE_OF_ONE_SENSOR_POSITION / 2) )
     {
-        // Apparently no line, or line is too wide
+        // The centroid is closer than half a "sensor position" from the center, so apparently no line, or line is too wide
 
         if (stateOfTracking == lineState_LOST_TO_THE_RIGHT ||
             stateOfTracking == lineState_LOST_TO_THE_LEFT  ||
@@ -118,12 +121,14 @@ void LineTracker::Update
         {
             // Before it was at the outmost sensor, so now it is probably beyond there
             stateOfTracking = lineState_LOST_TO_THE_RIGHT;
+            centroid = CENTROID_VALUE_OUTSIDE_RIGHT; // Mainly for debugging
             positionOfLine = 1.0;
         }
         else if (stateOfTracking == lineState_TRACKED_TO_THE_LEFT)
         {
             // Before it was at the outmost sensor, so now it is probably beyond there
             stateOfTracking = lineState_LOST_TO_THE_LEFT;
+            centroid = CENTROID_VALUE_OUTSIDE_LEFT; // Mainly for debugging
             positionOfLine = -1.0;
         }
         else
@@ -133,13 +138,13 @@ void LineTracker::Update
           positionOfLine = 0.0;
         }
     }
-    else if ((sensor[NO_OF_SENSORS-1].inputValue - sensor[NO_OF_SENSORS-2].inputValue) > ((inputMax - inputMin) / 2))
+    else if (centroid >= CENTROID_VALUE_OF_RIGHTMOST_SENSOR - (CENTROID_VALUE_OF_ONE_SENSOR_POSITION / 2))
     {
         // Only the rightmost sensor is asserted
         stateOfTracking = lineState_TRACKED_TO_THE_RIGHT;
         positionOfLine = 1.0;
     }
-    else if ((sensor[0].inputValue - sensor[1].inputValue) > ((inputMax - inputMin) / 2))
+    else if (centroid <= CENTROID_VALUE_OF_LEFTMOST_SENSOR + (CENTROID_VALUE_OF_ONE_SENSOR_POSITION / 2))
     {
         // Only the leftmost sensor is asserted
         stateOfTracking = lineState_TRACKED_TO_THE_LEFT;
@@ -150,7 +155,7 @@ void LineTracker::Update
         // The line is present and tracked properly
         stateOfTracking = lineState_TRACKED;
         // Set the position in the range [-0.5 - 0.5]
-        positionOfLine = (centroid - ((float)(NO_OF_SENSORS+1) / 2)) / ((float)(NO_OF_SENSORS+1) / 2);
+        positionOfLine = (centroid - CENTROID_VALUE_CENTER) / CENTROID_VALUE_CENTER;
     }
 
     *veichlePosition = -positionOfLine;
@@ -253,42 +258,17 @@ void LineTracker::DebugInfo
     {
         lineIndication[unsigned(centroid*2)-1 + a] = '=';
     }
+    lineIndication[3*NO_OF_SENSORS] = 0;
 
-    HwWrap::GetInstance()->DebugString(" Max:  ");
-    HwWrap::GetInstance()->DebugFloat(inputMax);
-    HwWrap::GetInstance()->DebugString("  Torque:  ");
+    HwWrap::GetInstance()->DebugNewLine();
+
+    HwWrap::GetInstance()->DebugString(" Torque:  ");
     HwWrap::GetInstance()->DebugFloat(torque);
-    HwWrap::GetInstance()->DebugNewLine();
-
-    HwWrap::GetInstance()->DebugString(" Min:  ");
-    HwWrap::GetInstance()->DebugFloat(inputMin);
-    HwWrap::GetInstance()->DebugString("  Mass:    ");
-    HwWrap::GetInstance()->DebugFloat(mass);
-    HwWrap::GetInstance()->DebugString("  Centroid:  ");
+    HwWrap::GetInstance()->DebugString("   Centroid:  ");
     HwWrap::GetInstance()->DebugFloat(centroid);
-    HwWrap::GetInstance()->DebugNewLine();
-
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-        HwWrap::GetInstance()->DebugString("  ");
-        HwWrap::GetInstance()->DebugFloat(sensor[i].inputValue);
-    }
-    HwWrap::GetInstance()->DebugString("   ");
+    HwWrap::GetInstance()->DebugString("    ");
     HwWrap::GetInstance()->DebugString( lineIndication );
-    HwWrap::GetInstance()->DebugNewLine();
 
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-        HwWrap::GetInstance()->DebugString("  ");
-        HwWrap::GetInstance()->DebugFloat(sensor[i].inputValue - inputMin);
-    }
-    HwWrap::GetInstance()->DebugString("        *****");
-    HwWrap::GetInstance()->DebugNewLine();
-
-    HwWrap::GetInstance()->DebugString(" Pos:  ");
-    if (positionOfLine > 0.0f)
-        HwWrap::GetInstance()->DebugString(" ");
-    HwWrap::GetInstance()->DebugFloat(positionOfLine);
     HwWrap::GetInstance()->DebugString("  ");
     switch (stateOfTracking)
     {
@@ -296,7 +276,7 @@ void LineTracker::DebugInfo
             HwWrap::GetInstance()->DebugString("UNDEFINED");
             break;
         case lineState_TRACKED:
-            HwWrap::GetInstance()->DebugString(" TRACKED ");
+            HwWrap::GetInstance()->DebugString("TRACKED");
             break;
         case lineState_TRACKED_TO_THE_RIGHT:
             HwWrap::GetInstance()->DebugString("TRACKED_R");
@@ -305,14 +285,25 @@ void LineTracker::DebugInfo
             HwWrap::GetInstance()->DebugString("TRACKED_L");
             break;
         case lineState_LOST_TO_THE_RIGHT:
-            HwWrap::GetInstance()->DebugString(" LOST_R  ");
+            HwWrap::GetInstance()->DebugString("LOST_R");
             break;
         case lineState_LOST_TO_THE_LEFT:
-            HwWrap::GetInstance()->DebugString(" LOST_L  ");
+            HwWrap::GetInstance()->DebugString("LOST_L");
             break;
         case lineState_LOST:
-            HwWrap::GetInstance()->DebugString("  LOST   ");
+            HwWrap::GetInstance()->DebugString("LOST");
             break;
     }
+    HwWrap::GetInstance()->DebugNewLine();
+
+    HwWrap::GetInstance()->DebugString(" Mass:    ");
+    HwWrap::GetInstance()->DebugFloat(mass);
+    HwWrap::GetInstance()->DebugString("   Line pos: ");
+    if (positionOfLine >= 0.0f)
+        HwWrap::GetInstance()->DebugString(" ");
+    HwWrap::GetInstance()->DebugFloat(positionOfLine);
+    HwWrap::GetInstance()->DebugString("         ^^^^^");
+    HwWrap::GetInstance()->DebugNewLine();
+
     HwWrap::GetInstance()->DebugNewLine();
 }
