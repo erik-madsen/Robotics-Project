@@ -5,14 +5,11 @@
 #define NO_OF_SENSORS 5
 #define ADC_RANGE 1024
 #define PWM_RANGE 256
-#define HP_FILTER_FACTOR 0.5
 
 typedef struct
 {
   unsigned pinNo;
   float    inputValue;
-  float    previousInputValue;
-  float    sensorSignal;
   float    sensorScaling;
   unsigned logicalLevel;
 }
@@ -20,11 +17,27 @@ ts_sensor;
 
 ts_sensor sensor[NO_OF_SENSORS];
 
+float commonMax;
+float commonMin;
+
 float rightEdgePosition = 0.0;
 float leftEdgePosition  = 0.0;
-float    positionValue[NO_OF_SENSORS+1] = {0.5, 0.3, 0.1, -0.1, -0.3, -0.5};
+float positionValue[NO_OF_SENSORS+1] = {0.5, 0.3, 0.1, -0.1, -0.3, -0.5};
 
 int debugPrescaler = 0;
+
+void calibrate()
+{
+  int i;
+
+  commonMax = 0.0;
+  commonMin = 1.0;
+  for (i=0; i<NO_OF_SENSORS; i++)
+  {
+    if (sensor[i].inputValue > commonMax) commonMax = sensor[i].inputValue;
+    if (sensor[i].inputValue < commonMin) commonMin = sensor[i].inputValue;
+  }
+}
 
 void setup()
 {
@@ -49,27 +62,36 @@ void setup()
   {
     sensor[i].inputValue = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
   }
+  calibrate();
 }
 
 void loop()
 {
   int i;
-  float inputValue;
+  t_boolean someHigh = FALSE;
+  t_boolean someLow  = FALSE;
 
   // Read sensors and determine their levels
   
   for (i=0; i<NO_OF_SENSORS; i++)
   {
-    sensor[i].previousInputValue = sensor[i].inputValue;
     sensor[i].inputValue = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
 
-    sensor[i].sensorSignal =
-      (HP_FILTER_FACTOR * sensor[i].sensorSignal) + (sensor[i].inputValue - sensor[i].previousInputValue);
-
-    if (sensor[i].sensorSignal > 0.02)
+    if (sensor[i].inputValue > (commonMax + commonMin) / 2.0)
+    {
       sensor[i].logicalLevel = 1;
-    if (sensor[i].sensorSignal < -0.02)
+      someHigh = TRUE;
+    }
+    else
+    {
       sensor[i].logicalLevel = 0;
+      someLow = TRUE;
+    }
+  }
+
+  if (someHigh && someLow)
+  {
+    calibrate();
   }
 
   // Determine the position of the line's right edge and set the position value
@@ -102,30 +124,22 @@ void loop()
   {
     debugPrescaler = 0;
 
+    Serial.print(" Max:    ");
+    Serial.print(commonMax);
+    Serial.println();
+
     Serial.print(" Input:  ");
     for (i=0; i<NO_OF_SENSORS; i++)
     {
       Serial.print(sensor[i].inputValue);
-      Serial.print("     ");
-    }
-    Serial.println();
-
-    Serial.print(" Prev.:  ");
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-      Serial.print(sensor[i].previousInputValue);
-      Serial.print("     ");
-    }
-    Serial.println();
-
-    Serial.print(" Signal: ");
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-      Serial.print(sensor[i].sensorSignal);
       Serial.print(":");
       Serial.print(sensor[i].logicalLevel);
       Serial.print("  ");
     }
+    Serial.println();
+
+    Serial.print(" Min:    ");
+    Serial.print(commonMin);
     Serial.println();
 
     Serial.print(" Pos:    ");
