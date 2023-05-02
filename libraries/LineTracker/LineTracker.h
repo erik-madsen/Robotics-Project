@@ -1,14 +1,12 @@
 /* 
     LineTracker.h
-    A line tracking module based on a row of sensors
 */
 
 #ifndef __LINE_TRACKER_H
 #define __LINE_TRACKER_H
 
 #include "Debug.h"
-
-#define NO_OF_SENSORS 5
+#include "HwWrap.h"
 
 typedef enum
 {

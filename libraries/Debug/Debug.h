@@ -3,6 +3,8 @@
     Configuration of debugging features
 */
 
+#define USE_DELAY_TO_CONTROL_TIMING
+
 #define USE_LINE_TRACKER
 #define SIM_LINE_TRACKER
 

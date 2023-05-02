@@ -1,4 +1,4 @@
-/* 
+/*
     LineTracker.cpp
 
     Responsibility:
@@ -10,11 +10,21 @@
 #include "Debug.h"
 #include "HwWrap.h"
 
-LineTracker::LineTracker(void)
+LineTracker::LineTracker
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
 }
 
-void LineTracker::Init(void)
+void LineTracker::Init
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     int i;
 
@@ -38,10 +48,12 @@ void LineTracker::Init(void)
 }
 
 void LineTracker::Update
+//  --------------------------------------------------------------------------------
 (
     lineState *lineState,   // Current state of the line tracking
     float *veichlePosition  // Current position of the veichle relative to the line
 )
+//  --------------------------------------------------------------------------------
 {
     unsigned i;
 
@@ -52,7 +64,6 @@ void LineTracker::Update
     inputMin = 1.0;
     mass   = 0.0;
     torque = 0.0;
-
 
     for (i=0; i<NO_OF_SENSORS; i++)
     {
@@ -148,18 +159,47 @@ void LineTracker::Update
 
 
 #ifdef SIM_LINE_TRACKER
-void LineTracker::SimulateInputs(void)
+void LineTracker::SimulateInputs
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
-    // Use a principal representation of the line position like this
-    // for debugging purposes:
-    // |.....*****.....|
-    // Dynamically let the '*' move sidewards and use their positions
-    // and use these to simulate the input values.
+    // For debugging purposes, use a principal representation of the line position like this,
+    // indicating the line and the line tracker:
+    // 
+    //   pos = 0   pos = 2*NO_OF_SENSORS
+    //   v         v
+    //   .....=====.....    Moving line to track
+    //
+    //     || ***** ||      Line tracker on the veichle
+    // 
+    // Dynamically let the '=' move sidewards and
+    // use their positions to simulate the input values.
 
-    // Initialize array to all '.'
-    for (int p=0; p<(3*NO_OF_SENSORS); p++)
+    // Initialize array
+    for (int s=0; s<(3*NO_OF_SENSORS); s++)
     {
-        simIndicationPoints[p] = '.';
+        simIndicationPoints[s] = 0;
+    }
+    // Simulate inputs of the imaginary line at the indicated position
+    for (int a=0; a<NO_OF_SENSORS; a++)
+    {
+        simIndicationPoints[simIndicationIndex + a] = 1;
+    }
+
+    // Simulate the inputs using just an arbitrary value
+    for (int p=NO_OF_SENSORS; p<(2*NO_OF_SENSORS); p++)
+    {
+        if (simIndicationPoints[p] == 1)
+        {
+            sensor[p - NO_OF_SENSORS].inputValue = 0.2;
+        }
+        else
+        {
+            sensor[p - NO_OF_SENSORS].inputValue = 0.0;
+        }
     }
 
     if (simCountingDir == 0)
@@ -171,6 +211,8 @@ void LineTracker::SimulateInputs(void)
         }
         else
         {
+            // Increment and change counting direction
+            simIndicationIndex++;
             simCountingDir = 1;
         }
     }
@@ -183,34 +225,34 @@ void LineTracker::SimulateInputs(void)
         }
         else
         {
+            // Decrement and change counting direction
+            simIndicationIndex--;
             simCountingDir = 0;
-        }
-    }
-
-    // Add the '*' at the indicated position
-    for (int s=0; s<NO_OF_SENSORS; s++)
-    {
-        simIndicationPoints[simIndicationIndex + s] = '*';
-    }
-
-    // Simulate the inputs using just an arbitrary value
-    for (int p=NO_OF_SENSORS; p<(2*NO_OF_SENSORS); p++)
-    {
-        if (simIndicationPoints[p] == '*')
-        {
-            sensor[p - NO_OF_SENSORS].inputValue = 0.2;
-        }
-        else
-        {
-            sensor[p - NO_OF_SENSORS].inputValue = 0.0;
         }
     }
 }
 #endif
 
-void LineTracker::DebugInfo(void)
+void LineTracker::DebugInfo
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     int i;
+    char lineIndication[(3*NO_OF_SENSORS + 1)];
+
+    // Initialize array for line indication
+    for (int s=0; s<(3*NO_OF_SENSORS); s++)
+    {
+        lineIndication[s] = '.';
+    }
+    // Mark the imaginary line at the indicated position
+    for (int a=0; a<NO_OF_SENSORS; a++)
+    {
+        lineIndication[unsigned(centroid*2)-1 + a] = '=';
+    }
 
     HwWrap::GetInstance()->DebugString(" Max:  ");
     HwWrap::GetInstance()->DebugFloat(inputMax);
@@ -231,6 +273,8 @@ void LineTracker::DebugInfo(void)
         HwWrap::GetInstance()->DebugString("  ");
         HwWrap::GetInstance()->DebugFloat(sensor[i].inputValue);
     }
+    HwWrap::GetInstance()->DebugString("   ");
+    HwWrap::GetInstance()->DebugString( lineIndication );
     HwWrap::GetInstance()->DebugNewLine();
 
     for (i=0; i<NO_OF_SENSORS; i++)
@@ -238,9 +282,12 @@ void LineTracker::DebugInfo(void)
         HwWrap::GetInstance()->DebugString("  ");
         HwWrap::GetInstance()->DebugFloat(sensor[i].inputValue - inputMin);
     }
+    HwWrap::GetInstance()->DebugString("        *****");
     HwWrap::GetInstance()->DebugNewLine();
 
     HwWrap::GetInstance()->DebugString(" Pos:  ");
+    if (positionOfLine > 0.0f)
+        HwWrap::GetInstance()->DebugString(" ");
     HwWrap::GetInstance()->DebugFloat(positionOfLine);
     HwWrap::GetInstance()->DebugString("  ");
     switch (stateOfTracking)
@@ -267,8 +314,5 @@ void LineTracker::DebugInfo(void)
             HwWrap::GetInstance()->DebugString("  LOST   ");
             break;
     }
-    HwWrap::GetInstance()->DebugString("              |");
-    HwWrap::GetInstance()->DebugString( simIndicationPoints );
-    HwWrap::GetInstance()->DebugString("|");
     HwWrap::GetInstance()->DebugNewLine();
 }

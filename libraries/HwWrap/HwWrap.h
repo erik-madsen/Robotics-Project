@@ -19,7 +19,6 @@
 
 #define ADC_RANGE 1024
 #define PWM_RANGE 256
-#define PWM_GAIN  1.0
 
 #define steeringInATurnRight    7
 #define steeringInBTurnLeft     6
@@ -38,11 +37,15 @@ class HwWrap
 
         unsigned DigitalInput(uint8_t inputNo);
 
-        void MotionStop();
-        void MotionFwd();
-        void MotionBwd();
+        void MotionStop(void);
+        void MotionFwd(void);
+        void MotionBwd(void);
 
-        void DebugString(char *string);
+        void SteeringStraight(void);
+        void SteeringRight(void);
+        void SteeringLeft(void);
+
+        void DebugString(const char *string);
         void DebugUnsigned(unsigned value);
         void DebugFloat(float value);
         void DebugNewLine(void);

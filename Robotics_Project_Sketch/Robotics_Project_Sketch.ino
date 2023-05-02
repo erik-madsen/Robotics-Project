@@ -24,30 +24,43 @@ static unsigned aiA1A0;
 static unsigned aiA1A0_last = 999;
 #endif /* USE_SPEED_CONTROL */
 
+
+#ifdef USE_LINE_TRACKER
 LineTracker tracker;
+#define PRESCALER_TRACKER_COUNT 12
+unsigned prescalerTracker = PRESCALER_TRACKER_COUNT;
+#endif
+
+
+#ifdef USE_STEERING
 WheelSteering steering;
 PIDregulator steeringPID;
+#define PRESCALER_STEERING_COUNT 1
+unsigned prescalerSteering = PRESCALER_STEERING_COUNT;
+#endif
 
 float steeringSignal = 0.0;
-int debugPrescaler = 0;
 
 void setup()
 {
     Serial.begin(9600);
     while (!Serial);
 
-    Serial.println();
+    HwWrap::GetInstance()->SteeringStraight();
 
     tracker.Init();
 
-    analogWrite(steeringInATurnRight, 0.0);
-    analogWrite(steeringInBTurnLeft, 0.0);
-
     steeringPID.SetRangeToIncludeMinusOne(1);
-    steeringPID.SetKp(2.5); // 2.5
+    steeringPID.SetKp(1.0); // 2.5
     steeringPID.SetKi(0.0); // 0.0
     steeringPID.SetKd(0.0); // 2.0
     steeringPID.Init();
+
+    HwWrap::GetInstance()->DebugNewLine();
+    HwWrap::GetInstance()->DebugNewLine();
+    HwWrap::GetInstance()->DebugString("--------------------  Restarted  --------------------");
+    HwWrap::GetInstance()->DebugNewLine();
+    HwWrap::GetInstance()->DebugNewLine();
 }
 
 void loop()
@@ -58,30 +71,49 @@ void loop()
     /* Control steering using the line tracker and a PID regulator */
 
 #ifdef USE_LINE_TRACKER
-    tracker.Update(&lineTrackedState, &trackedPosition);
-
-    switch (lineTrackedState)
+    if (prescalerTracker++ >= (PRESCALER_TRACKER_COUNT-1))
     {
-        // Stuff to do here could be something like 
-        // reversing in the opposite direction 
-        // if the line is lost to the right or left
-        case lineState_UNDEFINED:
-        case lineState_TRACKED:
-        case lineState_TRACKED_TO_THE_RIGHT:
-        case lineState_TRACKED_TO_THE_LEFT:
-        case lineState_LOST_TO_THE_RIGHT:
-        case lineState_LOST_TO_THE_LEFT:
-        case lineState_LOST:
+        prescalerTracker = 0;
+
+        tracker.Update(&lineTrackedState, &trackedPosition);
+
+        tracker.DebugInfo();
+
+        switch (lineTrackedState)
         {
+            // Stuff to do here could be something like 
+            // reversing in the opposite direction 
+            // if the line is lost to the right or left
+            case lineState_UNDEFINED:
+            case lineState_TRACKED:
+            case lineState_TRACKED_TO_THE_RIGHT:
+            case lineState_TRACKED_TO_THE_LEFT:
+            case lineState_LOST_TO_THE_RIGHT:
+            case lineState_LOST_TO_THE_LEFT:
+            case lineState_LOST:
+            {
+            }
+            break;
         }
-        break;
+
+        steeringSignal = steeringPID.Update(steeringOffset_CENTER - trackedPosition);
+        steering.Set(steeringSignal);
     }
 #endif /* USE_LINE_TRACKER */
 
+
 #ifdef USE_STEERING
-    steeringSignal = steeringPID.Update(steeringOffset_CENTER - trackedPosition);
-    steering.Update(steeringSignal);
+    if (prescalerSteering++ >= (PRESCALER_STEERING_COUNT-1))
+    {
+        prescalerSteering = 0;
+
+        steering.Update();
+
+        // steeringPID.DebugInfo();
+        steering.DebugInfo();
+    }
 #endif /* USE_STEERING */
+
 
 #ifdef USE_SPEED_CONTROL
     {
@@ -124,36 +156,6 @@ void loop()
 
 #define DEBUG_MODE 0
 
-    /* Dump debug information */
-
-#if DEBUG_MODE==1
-    if (++debugPrescaler >= 20)
-#elif DEBUG_MODE==2
-    if (++debugPrescaler >= 20)
-#elif DEBUG_MODE==3
-    if (++debugPrescaler >= 1)
-#elif DEBUG_MODE==4
-    if (++debugPrescaler >= 50)
-#else
-    delay(4*1000);
-#endif
-    {
-        debugPrescaler = 0;
-
-#ifdef USE_LINE_TRACKER
-        tracker.DebugInfo();
-#endif /* USE_LINE_TRACKER */
-
-#ifdef USE_STEERING
-        steeringPID.DebugInfo();
-        steering.DebugInfo();
-#endif /* USE_STEERING */
-
-#if defined USE_LINE_TRACKER || defined USE_STEERING
-        HwWrap::GetInstance()->DebugNewLine();
-#endif /* USE_LINE_TRACKER || USE_STEERING */
-    }
-
     /* Driving */
 
 #if DEBUG_MODE==1
@@ -169,5 +171,7 @@ void loop()
     analogWrite(motionInADriveBackwards, 0);
     analogWrite(motionInBDriveForwards, 25);
     delay(20);
+#else
+    delay(500);
 #endif
 }

@@ -1,5 +1,6 @@
-/* 
+/*
     PIDregulator.cpp
+
     The file contains the definition of a class used for PID regulation.
 */
 
@@ -37,7 +38,12 @@ will not exceed the maximum output of the regulator
 #include "Debug.h"
 #include "HwWrap.h"
 
-PIDregulator::PIDregulator(void)
+PIDregulator::PIDregulator
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     enabled = false;
     rangeToMinusOne = false;
@@ -51,29 +57,54 @@ PIDregulator::PIDregulator(void)
     errorLast = 0.0f;
 }
 
-void PIDregulator::ResetInternalValues(void)
+void PIDregulator::ResetInternalValues
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     errorSum = 0.0f;
     errorSumMax = 1.0f / Ki;
     errorLast = 0.0f;
 }
 
-void PIDregulator::Init(void)
+void PIDregulator::Init
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     enabled = true;
 }
 
-void PIDregulator::SetRangeToIncludeMinusOne(bool setting)
+void PIDregulator::SetRangeToIncludeMinusOne
+//  --------------------------------------------------------------------------------
+(
+    bool setting
+)
+//  --------------------------------------------------------------------------------
 {
     rangeToMinusOne = setting;
 }
 
-void PIDregulator::SetKp(float value)
+void PIDregulator::SetKp
+//  --------------------------------------------------------------------------------
+(
+    float value
+)
+//  --------------------------------------------------------------------------------
 {
     Kp = value;
 }
 
-void PIDregulator::SetKi(float value)
+void PIDregulator::SetKi
+//  --------------------------------------------------------------------------------
+(
+    float value
+)
+//  --------------------------------------------------------------------------------
 {
     Ki = value;
 
@@ -83,12 +114,22 @@ void PIDregulator::SetKi(float value)
     }
 }
 
-void PIDregulator::SetKd(float value)
+void PIDregulator::SetKd
+//  --------------------------------------------------------------------------------
+(
+    float value
+)
+//  --------------------------------------------------------------------------------
 {
     Kd = value;
 }
 
-void PIDregulator::GetParams(t_PID_parameters* param_ptr)
+void PIDregulator::GetParams
+//  --------------------------------------------------------------------------------
+(
+    t_PID_parameters* param_ptr
+)
+//  --------------------------------------------------------------------------------
 {
     // OS_EnterRegion();
     // ... just to make sure that the parameters are coherent
@@ -107,9 +148,11 @@ void PIDregulator::GetParams(t_PID_parameters* param_ptr)
 }
 
 float PIDregulator::Update
+//  --------------------------------------------------------------------------------
 (
     float error  // the actual error of the regulated parameter in the range [-1.0 .. 1.0]
 )
+//  --------------------------------------------------------------------------------
 {
     if (!enabled)
     {
@@ -152,7 +195,12 @@ float PIDregulator::Update
     return output;
 }
 
-void PIDregulator::DebugInfo(void)
+void PIDregulator::DebugInfo
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     HwWrap::GetInstance()->DebugString(" PID:  ");
     HwWrap::GetInstance()->DebugString("error ");

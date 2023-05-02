@@ -1,5 +1,6 @@
-/* 
+/*
     HwWrap.cpp
+
     A HW wrapper class for I/O etc.
     The class uses the singleton pattern.
 */
@@ -9,20 +10,32 @@
 #include "HwWrap.h"
 #include "Arduino.h"
 
-HwWrap::HwWrap(void)
+HwWrap::HwWrap
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     my_instance = this;
 }
 
-void HwWrap::Init(void)
+void HwWrap::Init
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
 }
 
 
 unsigned HwWrap::AnalogInput
+//  --------------------------------------------------------------------------------
 (
     uint8_t inputNo  // Arduino port number
 )
+//  --------------------------------------------------------------------------------
 {
     unsigned value;
 
@@ -49,58 +62,131 @@ unsigned HwWrap::AnalogInput
 }
 
 void HwWrap::AnalogOutput
+//  --------------------------------------------------------------------------------
 (
     uint8_t outputNo,   // Arduino port number
     unsigned int value  // PWM dutycycle in the range [0..255]
 )
+//  --------------------------------------------------------------------------------
 {
     analogWrite(outputNo, value);
 }
 
 unsigned HwWrap::DigitalInput
+//  --------------------------------------------------------------------------------
 (
     uint8_t inputNo  // Arduino port number
 )
+//  --------------------------------------------------------------------------------
 {
     return digitalRead(inputNo);
 }
 
 
-void HwWrap::MotionStop()
+void HwWrap::MotionStop
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     digitalWrite(motionInADriveBackwards, LOW);
     digitalWrite(motionInBDriveForwards, LOW);
 }
 
-void HwWrap::MotionFwd()
+void HwWrap::MotionFwd
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     digitalWrite(motionInADriveBackwards, LOW);
     digitalWrite(motionInBDriveForwards, HIGH);
 }
 
-void HwWrap::MotionBwd()
+void HwWrap::MotionBwd
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     digitalWrite(motionInADriveBackwards, HIGH);
     digitalWrite(motionInBDriveForwards, LOW);
 }
 
 
-void HwWrap::DebugString(char *string)
+void HwWrap::SteeringStraight
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
+{
+    analogWrite(steeringInATurnRight, 0);
+    analogWrite(steeringInBTurnLeft, 0);
+}
+
+void HwWrap::SteeringRight
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
+{
+    analogWrite(steeringInATurnRight, (PWM_RANGE-1));
+    analogWrite(steeringInBTurnLeft, 0);
+}
+
+void HwWrap::SteeringLeft
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
+{
+    analogWrite(steeringInATurnRight, 0);
+    analogWrite(steeringInBTurnLeft, (PWM_RANGE-1));
+}
+
+
+void HwWrap::DebugString
+//  --------------------------------------------------------------------------------
+(
+    const char *string
+)
+//  --------------------------------------------------------------------------------
 {
     Serial.print(string);
 }
 
-void HwWrap::DebugUnsigned(unsigned value)
+void HwWrap::DebugUnsigned
+//  --------------------------------------------------------------------------------
+(
+    unsigned value
+)
+//  --------------------------------------------------------------------------------
 {
     Serial.print(value);
 }
 
-void HwWrap::DebugFloat(float value)
+void HwWrap::DebugFloat
+//  --------------------------------------------------------------------------------
+(
+    float value
+)
+//  --------------------------------------------------------------------------------
 {
     Serial.print(value);
 }
 
-void HwWrap::DebugNewLine(void)
+void HwWrap::DebugNewLine
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
 {
     Serial.println();
 }

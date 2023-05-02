@@ -1,6 +1,5 @@
 /* 
     WheelSteering.h
-    A module for controlling the steering wheels
 */
 
 #ifndef __WHEEL_STEERING_H
@@ -14,8 +13,8 @@
 
 typedef enum
 {
-    steeringDirection_LEFT,
     steeringDirection_STRAIGHT,
+    steeringDirection_LEFT,
     steeringDirection_RIGHT
 }
 steeringDirection;
@@ -25,14 +24,19 @@ class WheelSteering
     public:
         WheelSteering(void);
 
-        void Update(float steeringSignal);
+        void Set(float steeringSignal);
+        void Update(void);
 
         void DebugInfo(void);
 
     protected:
 
     private:
-        steeringDirection currentDir;
+        float steeringSignalRequested;
+        float steeringSignalInUse;
+        steeringDirection currentDirection = steeringDirection_STRAIGHT;
+        steeringDirection currentWheelPos = steeringDirection_STRAIGHT;
+        unsigned timeSlot = 0;
 };
 
 #endif
