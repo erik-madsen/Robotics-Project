@@ -1,58 +1,70 @@
-// A line tracking module based on a row of sensors
+/* 
+    LineTracker.h
+    A line tracking module based on a row of sensors
+*/
 
 #ifndef __LINE_TRACKER_H
 #define __LINE_TRACKER_H
+
+#include "Debug.h"
 
 #define NO_OF_SENSORS 5
 
 typedef enum
 {
-  lineState_UNDEFINED,
-  lineState_TRACKED,
-  lineState_TRACKED_TO_THE_RIGHT,
-  lineState_TRACKED_TO_THE_LEFT,
-  lineState_LOST_TO_THE_RIGHT,
-  lineState_LOST_TO_THE_LEFT,
-  lineState_LOST
+    lineState_UNDEFINED,
+    lineState_TRACKED,
+    lineState_TRACKED_TO_THE_RIGHT,
+    lineState_TRACKED_TO_THE_LEFT,
+    lineState_LOST_TO_THE_RIGHT,
+    lineState_LOST_TO_THE_LEFT,
+    lineState_LOST
 }
 lineState;
 
 class LineTracker
 {
-  public:
-    LineTracker(void);
+    public:
+        LineTracker(void);
 
-    void Init(void);
-    void Update(lineState *lineState, float *position);
+        void Init(void);
+        void Update(lineState *lineState, float *veichlePosition);
 
-    void DebugInfo(void);
+        void DebugInfo(void);
 
-  protected:
+    protected:
 
-  private:
-    typedef struct
-    {
-      unsigned pinNo;
-      float    inputValue;
-      float    sensorBias;
-      float    sensorScaling;
-      bool     logicalLevel;
-    }
-    ts_sensor;
+    private:
+        typedef struct
+        {
+            unsigned pinNo;
+            float    inputValue;
+            float    sensorBias;
+            float    sensorScaling;
+            bool     logicalLevel;
+        }
+        ts_sensor;
 
-    ts_sensor sensor[NO_OF_SENSORS];
+        ts_sensor sensor[NO_OF_SENSORS];
 
-    float inputMax;
-    float inputMin;
+        float inputMax;
+        float inputMin;
 
-    float mass     = 0.0;
-    float torque   = 0.0;
-    float centroid = 0.0;
+        float mass     = 0.0;
+        float torque   = 0.0;
+        float centroid = 0.0;
 
-    float positionOfLine = 0.0;
+        float positionOfLine = 0.0;
 
-    lineState stateOfTracking  = lineState_UNDEFINED;
+        lineState stateOfTracking  = lineState_UNDEFINED;
 
+#ifdef SIM_LINE_TRACKER
+        char simIndicationPoints[(3*NO_OF_SENSORS + 1)];
+        unsigned int simIndicationIndex = NO_OF_SENSORS;
+        unsigned int simCountingDir = 0;
+
+        void SimulateInputs(void);
+#endif
 };
 
 #endif

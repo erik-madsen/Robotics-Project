@@ -1,5 +1,10 @@
-// A HW wrapper class for I/O etc.
-// The class uses the singleton pattern.
+/* 
+    HwWrap.h
+    A HW wrapper class for I/O etc.
+    The class uses the singleton pattern.
+*/
+
+#include "stdint.h"
 
 #ifndef __HW_WRAP_H
 #define __HW_WRAP_H
@@ -23,28 +28,30 @@
 
 class HwWrap
 {
-  public:
-    static HwWrap* GetInstance() { return my_instance; };
+    public:
+        static HwWrap* GetInstance() { return my_instance; };
 
-    void Init(void);
+        void Init(void);
 
-    unsigned AnalogInput(int inputNo);
-    unsigned DigitalInput(int inputNo);
+        unsigned AnalogInput(uint8_t inputNo);
+        void AnalogOutput(uint8_t outputNo, unsigned int value);
 
-    void MotionStop();
-    void MotionFwd();
-    void MotionBwd();
+        unsigned DigitalInput(uint8_t inputNo);
 
-    void DebugString(const char *string);
-    void DebugUnsigned(unsigned value);
-    void DebugFloat(float value);
-    void DebugNewLine();
+        void MotionStop();
+        void MotionFwd();
+        void MotionBwd();
 
-  protected:
+        void DebugString(char *string);
+        void DebugUnsigned(unsigned value);
+        void DebugFloat(float value);
+        void DebugNewLine(void);
 
-  private:
-    HwWrap(void);
-    static HwWrap* my_instance;
+    protected:
+
+    private:
+        HwWrap(void);
+        static HwWrap* my_instance;
 
 };
 
