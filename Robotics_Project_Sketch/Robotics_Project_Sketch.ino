@@ -1,155 +1,158 @@
 /*
-  An Arduino IDE SW for experimenting with the line tracking module
+  An Arduino IDE SW for experimenting with the line tracking module controlling the steering
 */
 
-#define NO_OF_SENSORS 5
-#define ADC_RANGE 1024
-#define PWM_RANGE 256
+#include "Common.h"
+#include "HwWrap.h"
+#include "LineTracker.h"
+#include "PIDregulator.h"
 
-typedef struct
-{
-  unsigned pinNo;
-  float    inputValue;
-  float    sensorScaling;
-  unsigned logicalLevel;
-}
-ts_sensor;
-
-ts_sensor sensor[NO_OF_SENSORS];
-
-float commonMax;
-float commonMin;
-
-float rightEdgePosition = 0.0;
-float leftEdgePosition  = 0.0;
-float positionValue[NO_OF_SENSORS+1] = {0.5, 0.3, 0.1, -0.1, -0.3, -0.5};
+float PIDoutput;
 
 int debugPrescaler = 0;
 
-void calibrate()
-{
-  int i;
+/* Pin description */
 
-  commonMax = 0.0;
-  commonMin = 1.0;
-  for (i=0; i<NO_OF_SENSORS; i++)
-  {
-    if (sensor[i].inputValue > commonMax) commonMax = sensor[i].inputValue;
-    if (sensor[i].inputValue < commonMin) commonMin = sensor[i].inputValue;
-  }
-}
+int steeringInA = 2;
+int steeringInB = 3;
+int motionInA   = 40;
+int motionInB   = 41;
+
 
 void setup()
 {
-  int i;
-
   Serial.begin(9600);
   while (!Serial);
 
-  sensor[0].pinNo = A0;
-  sensor[1].pinNo = A1;
-  sensor[2].pinNo = A2;
-  sensor[3].pinNo = A3;
-  sensor[4].pinNo = A4;
+  LineTracker_Init();
 
-  sensor[0].sensorScaling = 35.0 / 28.0;
-  sensor[1].sensorScaling = 35.0 / 20.0;
-  sensor[2].sensorScaling = 35.0 / 37.0;
-  sensor[3].sensorScaling = 35.0 / 28.0;
-  sensor[4].sensorScaling = 35.0 / 29.0;
-
-  for (i=0; i<NO_OF_SENSORS; i++)
-  {
-    sensor[i].inputValue = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
-  }
-  calibrate();
+  PID_constructor();
+  PID_SetRangeToIncludeMinusOne(1);
+  PID_SetKp(1.8);
+  PID_SetKi(0.0);
+  PID_Init();
 }
+
+
+unsigned HwWrap_AnalogInput(unsigned inputNo)
+{
+  unsigned value;
+
+  switch (inputNo)
+  {
+    case 0:
+      value = analogRead(A0);
+      break;
+    case 1:
+      value = analogRead(A1);
+      break;
+    case 2:
+      value = analogRead(A2);
+      break;
+    case 3:
+      value = analogRead(A3);
+      break;
+    case 4:
+      value = analogRead(A4);
+      break;
+  }
+}
+
+void HwWrap_MotionStop()
+{
+  digitalWrite(motionInA, LOW);
+  digitalWrite(motionInB, LOW);
+}
+
+void HwWrap_MotionFwd()
+{
+  digitalWrite(motionInA, LOW);
+  digitalWrite(motionInB, HIGH);
+}
+
+void HwWrap_MotionBwd()
+{
+  digitalWrite(motionInA, HIGH);
+  digitalWrite(motionInB, LOW);
+}
+
+
+void HwWrap_DebugString(char *string)
+{
+  Serial.print(string);
+}
+
+void HwWrap_DebugUnsigned(unsigned value)
+{
+  Serial.print(value);
+}
+
+void HwWrap_DebugFloat(float value)
+{
+  Serial.print(value);
+}
+
+void HwWrap_DebugNewLine()
+{
+  Serial.println();
+}
+
 
 void loop()
 {
-  int i;
-  t_boolean someHigh = FALSE;
-  t_boolean someLow  = FALSE;
+  t_boolean lineDetected;
+  float position;
 
-  // Read sensors and determine their levels
-  
-  for (i=0; i<NO_OF_SENSORS; i++)
+  LineTracker_Update(&lineDetected, &position);
+
+  if (lineDetected)
   {
-    sensor[i].inputValue = ((float)analogRead(sensor[i].pinNo) / ADC_RANGE) * sensor[i].sensorScaling;
-
-    if (sensor[i].inputValue > (commonMax + commonMin) / 2.0)
+    /* Control steering using PID regulator */
+  
+    PIDoutput = PID_Update(0.0 - position);
+  
+    if (PIDoutput > 0.0)
     {
-      sensor[i].logicalLevel = 1;
-      someHigh = TRUE;
+      analogWrite(steeringInA, PIDoutput * (PWM_RANGE-1));
+      analogWrite(steeringInB, 0.0);
+    }
+    else if (PIDoutput < -0.0)
+    {
+      analogWrite(steeringInA, 0.0);
+      analogWrite(steeringInB, (-PIDoutput) * (PWM_RANGE-1));
     }
     else
     {
-      sensor[i].logicalLevel = 0;
-      someLow = TRUE;
+      analogWrite(steeringInA, 0.0);
+      analogWrite(steeringInB, 0.0);
     }
   }
-
-  if (someHigh && someLow)
+  else
   {
-    calibrate();
+    /* The line is lost; just continue in the same direction */
   }
 
-  // Determine the position of the line's right edge and set the position value
+  /* Dump debug information */
 
-  for (i=NO_OF_SENSORS-1; i>=0; i--)
-  {
-    rightEdgePosition = positionValue[i+1];
-    if (sensor[i].logicalLevel == 1)
-    {
-      break;
-    }
-    rightEdgePosition = positionValue[i];
-  }
-
-  // Determine the position of the line's left edge and set the position value
-
-  for (i=0; i<=NO_OF_SENSORS-1; i++)
-  {
-    leftEdgePosition = positionValue[i];
-    if (sensor[i].logicalLevel == 1)
-    {
-      break;
-    }
-    leftEdgePosition = positionValue[i+1];
-  }
-
-  // Dump debug information
-
-  /* if (debugPrescaler++ >= 20) */
+  if (debugPrescaler++ >= 20)
   {
     debugPrescaler = 0;
 
-    Serial.print(" Max:    ");
-    Serial.print(commonMax);
+    LineTracker_DebugInfo();
+
+    Serial.print(" PID:    ");
+    Serial.print(PIDoutput);
     Serial.println();
 
-    Serial.print(" Input:  ");
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-      Serial.print(sensor[i].inputValue);
-      Serial.print(":");
-      Serial.print(sensor[i].logicalLevel);
-      Serial.print("  ");
-    }
-    Serial.println();
-
-    Serial.print(" Min:    ");
-    Serial.print(commonMin);
-    Serial.println();
-
-    Serial.print(" Pos:    ");
-    Serial.print(leftEdgePosition);
-    Serial.print("  ");
-    Serial.print(rightEdgePosition);
-    Serial.println();
-  
     Serial.println();
   }
-  
-  delay(2000);
+
+  /* Driving */
+
+  HwWrap_MotionFwd();
+  delay(20);
+  HwWrap_MotionStop();
+  delay(80);
+
+  /* delay(100); */
 }
