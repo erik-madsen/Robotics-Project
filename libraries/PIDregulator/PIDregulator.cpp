@@ -36,8 +36,6 @@ will not exceed the maximum output of the regulator
 #include "PIDregulator.h"
 #include "HwWrap.h"
 
-HwWrap HwDebug;
-
 PIDregulator::PIDregulator(void)
 {
   enabled = false;
@@ -163,10 +161,10 @@ float error  // the actual error of the regulated parameter in the range [-1.0 .
 
 void PIDregulator::DebugInfo(void)
 {
-  HwDebug.DebugString(" PID:  ");
-  HwDebug.DebugString("error ");
-  HwDebug.DebugFloat(errorLast);
-  HwDebug.DebugString("  output ");
-  HwDebug.DebugFloat(output);
-  HwDebug.DebugNewLine();
+  HwWrap::GetInstance()->DebugString(" PID:  ");
+  HwWrap::GetInstance()->DebugString("error ");
+  HwWrap::GetInstance()->DebugFloat(errorLast);
+  HwWrap::GetInstance()->DebugString("  output ");
+  HwWrap::GetInstance()->DebugFloat(output);
+  HwWrap::GetInstance()->DebugNewLine();
 }

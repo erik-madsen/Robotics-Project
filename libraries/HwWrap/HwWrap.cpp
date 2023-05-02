@@ -1,11 +1,18 @@
 // A HW wrapper class for I/O etc.
+// The class uses the singleton pattern.
 
 #include "HwWrap.h"
 #include "Arduino.h"
 
 HwWrap::HwWrap(void)
 {
+  my_instance = this;
 }
+
+void HwWrap::Init(void)
+{
+}
+
 
 unsigned HwWrap::AnalogInput(int inputNo)
 {
@@ -34,22 +41,28 @@ unsigned HwWrap::AnalogInput(int inputNo)
 }
 
 
+unsigned HwWrap::DigitalInput(int inputNo)
+{
+    return digitalRead(inputNo);
+}
+
+
 void HwWrap::MotionStop()
 {
-  digitalWrite(motionInA, LOW);
-  digitalWrite(motionInB, LOW);
+  digitalWrite(motionInADriveBackwards, LOW);
+  digitalWrite(motionInBDriveForwards, LOW);
 }
 
 void HwWrap::MotionFwd()
 {
-  digitalWrite(motionInA, LOW);
-  digitalWrite(motionInB, HIGH);
+  digitalWrite(motionInADriveBackwards, LOW);
+  digitalWrite(motionInBDriveForwards, HIGH);
 }
 
 void HwWrap::MotionBwd()
 {
-  digitalWrite(motionInA, HIGH);
-  digitalWrite(motionInB, LOW);
+  digitalWrite(motionInADriveBackwards, HIGH);
+  digitalWrite(motionInBDriveForwards, LOW);
 }
 
 

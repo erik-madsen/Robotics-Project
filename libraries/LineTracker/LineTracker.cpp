@@ -3,23 +3,8 @@
 #include "LineTracker.h"
 #include "HwWrap.h"
 
-HwWrap HwLine;
-
 LineTracker::LineTracker(void)
 {
-}
-
-void LineTracker::Calibrate(void)
-{
-  int i;
-
-  commonMax = 0.0;
-  commonMin = 1.0;
-  for (i=0; i<NO_OF_SENSORS; i++)
-  {
-    if (sensor[i].inputValue > commonMax) commonMax = sensor[i].inputValue;
-    if (sensor[i].inputValue < commonMin) commonMin = sensor[i].inputValue;
-  }
 }
 
 void LineTracker::Init(void)
@@ -32,231 +17,170 @@ void LineTracker::Init(void)
   sensor[3].pinNo = LOGICAL_INPUT_3;
   sensor[4].pinNo = LOGICAL_INPUT_4;
 
-  sensor[0].sensorBias = 0.05;
-  sensor[1].sensorBias = 0.06;
-  sensor[2].sensorBias = 0.12;
-  sensor[3].sensorBias = 0.08;
-  sensor[4].sensorBias = 0.07;
+  sensor[0].sensorBias = 0.09;
+  sensor[1].sensorBias = 0.04;
+  sensor[2].sensorBias = 0.17;
+  sensor[3].sensorBias = 0.11;
+  sensor[4].sensorBias = 0.19;
 
-  sensor[0].sensorScaling = 1.00 / 0.81;
-  sensor[1].sensorScaling = 1.00 / 0.81;
-  sensor[2].sensorScaling = 1.00 / 0.91;
-  sensor[3].sensorScaling = 1.00 / 0.87;
-  sensor[4].sensorScaling = 1.00 / 0.84;
-
-  for (i=0; i<NO_OF_SENSORS; i++)
-  {
-    sensor[i].inputValue = ((float)HwLine.AnalogInput(sensor[i].pinNo) / ADC_RANGE);
-    sensor[i].inputValue -= sensor[i].sensorBias;
-    sensor[i].inputValue *= sensor[i].sensorScaling;
-  }
-  LineTracker::Calibrate();
+  sensor[0].sensorScaling = 1.00 / 1.00;
+  sensor[1].sensorScaling = 1.00 / 1.00;
+  sensor[2].sensorScaling = 1.00 / 1.00;
+  sensor[3].sensorScaling = 1.00 / 1.00;
+  sensor[4].sensorScaling = 1.00 / 1.00;
 }
 
-void LineTracker::Update(lineEdgeState *lineState, float *position)
+void LineTracker::Update(lineState *lineState, float *position)
 {
-  int i;
-  bool someHigh = false;
-  bool someLow  = false;
+  unsigned i;
 
-  // Read sensors and determine their levels
-  
+  // Read sensor inputs, and
+  // determine min and max values
+
+  inputMax = 0.0;
+  inputMin = 1.0;
+  mass   = 0.0;
+  torque = 0.0;
+
+
   for (i=0; i<NO_OF_SENSORS; i++)
   {
-    sensor[i].inputValue = ((float)HwLine.AnalogInput(sensor[i].pinNo) / ADC_RANGE);
+    sensor[i].inputValue = ((float)HwWrap::GetInstance()->AnalogInput(sensor[i].pinNo) / ADC_RANGE);
     sensor[i].inputValue -= sensor[i].sensorBias;
     sensor[i].inputValue *= sensor[i].sensorScaling;
 
-    if (sensor[i].inputValue > (commonMax + commonMin) / 2.0)
+    if (sensor[i].inputValue > inputMax) inputMax = sensor[i].inputValue;
+    if (sensor[i].inputValue < inputMin) inputMin = sensor[i].inputValue;
+  }
+
+  // Use a histogram representation of the inputs to find
+  // the lines position based on the histogram's "torque"
+
+  for (i=0; i<NO_OF_SENSORS; i++)
+  {
+    mass += (sensor[i].inputValue - inputMin);
+    torque += ((sensor[i].inputValue - inputMin) * (i+1));
+  }
+
+
+  // Set the position value and state, where the position
+  // approximately is the center of the visible part of the line
+
+  centroid = torque / mass;
+
+  if ((inputMax - inputMin) < 0.08)
+  {
+    // Apparently no line, or line it too wide
+
+    if (stateOfTracking == lineState_LOST_TO_THE_RIGHT ||
+        stateOfTracking == lineState_LOST_TO_THE_LEFT  ||
+        stateOfTracking == lineState_LOST)
     {
-      sensor[i].logicalLevel = true;
-      someHigh = true;
+      // Lost state is already recognized
+      // Just keep the state and the last position value until the line is found again
+    }
+    else if (stateOfTracking == lineState_TRACKED_TO_THE_RIGHT)
+    {
+      // Before it was at the outmost sensor, so now it is probably beyond there
+      stateOfTracking = lineState_LOST_TO_THE_RIGHT;
+      positionOfLine = 1.0;
+    }
+    else if (stateOfTracking == lineState_TRACKED_TO_THE_LEFT)
+    {
+      // Before it was at the outmost sensor, so now it is probably beyond there
+      stateOfTracking = lineState_LOST_TO_THE_LEFT;
+      positionOfLine = -1.0;
     }
     else
     {
-      sensor[i].logicalLevel = false;
-      someLow = true;
+      // Before it was tracked inside the outmost sensors, so now it is probably gone
+      stateOfTracking = lineState_LOST;
+      positionOfLine = 0.0;
     }
   }
-
-  // Calculate variance and dispersion
-/*   {
-    float mean       = 0.0;
-    float variance   = 0.0;
-    float dispersion = 0.0;
-
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-      mean += sensor[i].inputValue;
-    }
-    mean /= NO_OF_SENSORS;
-
-    for (i=0; i<NO_OF_SENSORS; i++)
-    {
-      HwLine.DebugFloat((sensor[i].inputValue - mean));
-      HwLine.DebugNewLine();
-      variance += (sensor[i].inputValue - mean)*(sensor[i].inputValue - mean)*100;
-    }
-    variance /= NO_OF_SENSORS;
-
-    HwLine.DebugString(" Mean: ");
-    HwLine.DebugFloat(mean);
-    HwLine.DebugString(" Variance: ");
-    HwLine.DebugFloat(variance);
-    HwLine.DebugNewLine();
-  }
- */
-  // If some sensor levels are high and some are low,
-  // then update the references for level detection
-
-  if (someHigh && someLow)
+  else if ((sensor[NO_OF_SENSORS-1].inputValue - sensor[NO_OF_SENSORS-2].inputValue) > ((inputMax - inputMin) / 2))
   {
-    LineTracker::Calibrate();
+    // Only the rightmost sensor is asserted
+    stateOfTracking = lineState_TRACKED_TO_THE_RIGHT;
+    positionOfLine = 1.0;
   }
-
-  // Search the line's right edge by running 
-  // through the sensors from right to left,
-  // and set the position value accordingly
-
-  for (i=NO_OF_SENSORS-1; i>=0; i--)
+  else if ((sensor[0].inputValue - sensor[1].inputValue) > ((inputMax - inputMin) / 2))
   {
-    if (sensor[i].logicalLevel)
-    {
-      // The right edge is recognized
-
-      if (i==NO_OF_SENSORS-1)
-      {
-        stateOfRightEdge = lineEdgeState_TRACKED_AT_FAR_RIGHT_SENSOR;
-      }
-      else if (i==0)
-      {
-        stateOfRightEdge = lineEdgeState_TRACKED_AT_FAR_LEFT_SENSOR;
-      }
-      else
-      {
-        stateOfRightEdge = lineEdgeState_TRACKED;
-      }
-      positionRelativeToRightEdge = positionValue[i+1];
-
-      break;
-    }
-    else if (i==0)
-    {
-      // The right edge is not recognized
-
-      if (stateOfRightEdge == lineEdgeState_LOST_TO_THE_RIGHT ||
-          stateOfRightEdge == lineEdgeState_LOST_TO_THE_LEFT  ||
-          stateOfRightEdge == lineEdgeState_LOST)
-      {
-        // Lost state is already recognized
-        // Just keep the state and the last position value until the line is found again
-      }
-      else if (stateOfRightEdge == lineEdgeState_TRACKED_AT_FAR_RIGHT_SENSOR)
-      {
-        // Before it was at the outmost sensor, so now it is probably beyond there
-        stateOfRightEdge = lineEdgeState_LOST_TO_THE_RIGHT;
-        positionRelativeToRightEdge = positionValue[NO_OF_SENSORS];
-      }
-      else if (stateOfRightEdge == lineEdgeState_TRACKED_AT_FAR_LEFT_SENSOR)
-      {
-        // Before it was at the outmost sensor, so now it is probably beyond there
-        stateOfRightEdge = lineEdgeState_LOST_TO_THE_LEFT;
-        positionRelativeToRightEdge = positionValue[0];
-      }
-      else
-      {
-        // Before it was tracked inside the outmost sensors, so now it is probably gone
-        stateOfRightEdge = lineEdgeState_LOST;
-      }
-    }
+    // Only the leftmost sensor is asserted
+    stateOfTracking = lineState_TRACKED_TO_THE_LEFT;
+    positionOfLine = -1.0;
   }
-
-  // Search the line's left edge by running 
-  // through the sensors from left to right,
-  // and set the position value accordingly
-
-  for (i=0; i<=NO_OF_SENSORS-1; i++)
+  else
   {
-    if (sensor[i].logicalLevel)
-    {
-      positionRelativeToLeftEdge = positionValue[i];
-      break;
-    }
-    positionRelativeToLeftEdge = positionValue[i+1];
+    // The line is present and tracked properly
+    stateOfTracking = lineState_TRACKED;
+    // Set the position in the range [-0.5 - 0.5]
+    positionOfLine = (centroid - ((float)(NO_OF_SENSORS+1) / 2)) / ((float)(NO_OF_SENSORS+1) / 2);
   }
 
-  *position = positionRelativeToRightEdge;
-  *lineState = stateOfRightEdge;
+  *position = positionOfLine;
+  *lineState = stateOfTracking;
 }
+
 
 void LineTracker::DebugInfo(void)
 {
   int i;
 
-  HwLine.DebugString(" Max:  ");
-  HwLine.DebugFloat(commonMax);
-  HwLine.DebugString("  /");
+  HwWrap::GetInstance()->DebugString(" Max:  ");
+  HwWrap::GetInstance()->DebugFloat(inputMax);
+  HwWrap::GetInstance()->DebugString("  Torque:  ");
+  HwWrap::GetInstance()->DebugFloat(torque);
+  HwWrap::GetInstance()->DebugNewLine();
+
+  HwWrap::GetInstance()->DebugString(" Min:  ");
+  HwWrap::GetInstance()->DebugFloat(inputMin);
+  HwWrap::GetInstance()->DebugString("  Mass:    ");
+  HwWrap::GetInstance()->DebugFloat(mass);
+  HwWrap::GetInstance()->DebugString("  Centroid:  ");
+  HwWrap::GetInstance()->DebugFloat(centroid);
+  HwWrap::GetInstance()->DebugNewLine();
 
   for (i=0; i<NO_OF_SENSORS; i++)
   {
-    if (sensor[i].logicalLevel)
-    {
-      HwLine.DebugString("  ");
-      HwLine.DebugFloat(sensor[i].inputValue);
-    }
-    else
-    {
-      HwLine.DebugString("  ....");
-    }
+    HwWrap::GetInstance()->DebugString("  ");
+    HwWrap::GetInstance()->DebugFloat(sensor[i].inputValue);
   }
-  HwLine.DebugNewLine();
-
-  HwLine.DebugString(" Min:  ");
-  HwLine.DebugFloat(commonMin);
-  HwLine.DebugString("  \\");
+  HwWrap::GetInstance()->DebugNewLine();
 
   for (i=0; i<NO_OF_SENSORS; i++)
   {
-    if (!sensor[i].logicalLevel)
-    {
-      HwLine.DebugString("  ");
-      HwLine.DebugFloat(sensor[i].inputValue);
-    }
-    else
-    {
-      HwLine.DebugString("  ....");
-    }
+    HwWrap::GetInstance()->DebugString("  ");
+    HwWrap::GetInstance()->DebugFloat(sensor[i].inputValue - inputMin);
   }
-  HwLine.DebugNewLine();
+  HwWrap::GetInstance()->DebugNewLine();
 
-  HwLine.DebugString(" Pos:  L ");
-  HwLine.DebugFloat(positionRelativeToLeftEdge);
-  HwLine.DebugString("  ");
-  switch (stateOfRightEdge)
+  HwWrap::GetInstance()->DebugString(" Pos:  ");
+  HwWrap::GetInstance()->DebugFloat(positionOfLine);
+  HwWrap::GetInstance()->DebugString("  ");
+  switch (stateOfTracking)
   {
-    case lineEdgeState_UNDEFINED:
-      HwLine.DebugString("UNDEFINED");
+    case lineState_UNDEFINED:
+      HwWrap::GetInstance()->DebugString("UNDEFINED");
       break;
-    case lineEdgeState_TRACKED:
-      HwLine.DebugString(" TRACKED ");
+    case lineState_TRACKED:
+      HwWrap::GetInstance()->DebugString(" TRACKED ");
       break;
-    case lineEdgeState_TRACKED_AT_FAR_RIGHT_SENSOR:
-      HwLine.DebugString("TRACKED_R");
+    case lineState_TRACKED_TO_THE_RIGHT:
+      HwWrap::GetInstance()->DebugString("TRACKED_R");
       break;
-    case lineEdgeState_TRACKED_AT_FAR_LEFT_SENSOR:
-      HwLine.DebugString("TRACKED_L");
+    case lineState_TRACKED_TO_THE_LEFT:
+      HwWrap::GetInstance()->DebugString("TRACKED_L");
       break;
-    case lineEdgeState_LOST_TO_THE_RIGHT:
-      HwLine.DebugString(" LOST_R  ");
+    case lineState_LOST_TO_THE_RIGHT:
+      HwWrap::GetInstance()->DebugString(" LOST_R  ");
       break;
-    case lineEdgeState_LOST_TO_THE_LEFT:
-      HwLine.DebugString(" LOST_L  ");
+    case lineState_LOST_TO_THE_LEFT:
+      HwWrap::GetInstance()->DebugString(" LOST_L  ");
       break;
-    case lineEdgeState_LOST:
-      HwLine.DebugString("  LOST   ");
+    case lineState_LOST:
+      HwWrap::GetInstance()->DebugString("  LOST   ");
       break;
   }
-  HwLine.DebugString("  R ");
-  HwLine.DebugFloat(positionRelativeToRightEdge);
-  HwLine.DebugNewLine();
+  HwWrap::GetInstance()->DebugNewLine();
 }

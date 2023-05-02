@@ -7,15 +7,15 @@
 
 typedef enum
 {
-  lineEdgeState_UNDEFINED,
-  lineEdgeState_TRACKED,
-  lineEdgeState_TRACKED_AT_FAR_RIGHT_SENSOR,
-  lineEdgeState_TRACKED_AT_FAR_LEFT_SENSOR,
-  lineEdgeState_LOST_TO_THE_RIGHT,
-  lineEdgeState_LOST_TO_THE_LEFT,
-  lineEdgeState_LOST
+  lineState_UNDEFINED,
+  lineState_TRACKED,
+  lineState_TRACKED_TO_THE_RIGHT,
+  lineState_TRACKED_TO_THE_LEFT,
+  lineState_LOST_TO_THE_RIGHT,
+  lineState_LOST_TO_THE_LEFT,
+  lineState_LOST
 }
-lineEdgeState;
+lineState;
 
 class LineTracker
 {
@@ -23,7 +23,7 @@ class LineTracker
     LineTracker(void);
 
     void Init(void);
-    void Update(lineEdgeState *lineState, float *position);
+    void Update(lineState *lineState, float *position);
 
     void DebugInfo(void);
 
@@ -42,17 +42,16 @@ class LineTracker
 
     ts_sensor sensor[NO_OF_SENSORS];
 
-    float commonMax;
-    float commonMin;
+    float inputMax;
+    float inputMin;
 
-    float positionRelativeToRightEdge = 0.0;
-    float positionRelativeToLeftEdge  = 0.0;
-    float positionValue[NO_OF_SENSORS+1] = {0.3, 0.2, 0.1, -0.1, -0.2, -0.3};
+    float mass     = 0.0;
+    float torque   = 0.0;
+    float centroid = 0.0;
 
-    lineEdgeState stateOfRightEdge = lineEdgeState_UNDEFINED;
-    lineEdgeState stateOfLeftEdge  = lineEdgeState_UNDEFINED;
+    float positionOfLine = 0.0;
 
-    void Calibrate(void);
+    lineState stateOfTracking  = lineState_UNDEFINED;
 
 };
 

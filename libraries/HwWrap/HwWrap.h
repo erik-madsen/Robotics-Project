@@ -1,4 +1,5 @@
 // A HW wrapper class for I/O etc.
+// The class uses the singleton pattern.
 
 #ifndef __HW_WRAP_H
 #define __HW_WRAP_H
@@ -13,19 +14,22 @@
 
 #define ADC_RANGE 1024
 #define PWM_RANGE 256
-#define PWM_GAIN  0.7
+#define PWM_GAIN  1.0
 
-#define steeringInA  2
-#define steeringInB  3
-#define motionInA   40
-#define motionInB   41
+#define steeringInATurnRight    7
+#define steeringInBTurnLeft     6
+#define motionInADriveBackwards 4
+#define motionInBDriveForwards  5
 
 class HwWrap
 {
   public:
-    HwWrap(void);
+    static HwWrap* GetInstance() { return my_instance; };
+
+    void Init(void);
 
     unsigned AnalogInput(int inputNo);
+    unsigned DigitalInput(int inputNo);
 
     void MotionStop();
     void MotionFwd();
@@ -39,6 +43,8 @@ class HwWrap
   protected:
 
   private:
+    HwWrap(void);
+    static HwWrap* my_instance;
 
 };
 
