@@ -1,37 +1,40 @@
 /*
     PIDregulator.cpp
 
-    The file contains the definition of a class used for PID regulation.
-*/
+    Responsibility:
+    ---------------
+    Implement a PID regulation class.
 
-/*
-Functional description :
-------------------------
-Until the PID regulator is enabled, the output is 0.0
-The default range of the output from the PID regulator 
-is [0.0 .. 1.0] but it can be changed to [-1.0 .. 1.0]
+    An instances of this class is an "active object" and
+    it's "Update" function must be called on a regular basis.
 
-Trimming the PID regulator :
-----------------------------
-A simple method to achieve an initial, usable setting of 
-the PID regulator parameters is as follows:
- - Set Kp, Ki, and Kd to zero.
- - Gradually increase the Kp until the output of the PID regulator
-   becomes unstable.
-   Then use a value of Kp that is approximately 50% of this.
- - Gradually increase the Ki until the output of the PID regulator
-   becomes unstable.
-   Then use a value of Ki that is approximately 80% of this.
- - Gradually increase the Kd until the output of the PID regulator
-   becomes unstable.
-   Then use a value of Kd that is approximately 80% of this.
-The PID regulator may afterwards need a mores specific adjustment 
-with respect to the actual regulation loop and it purpose.
+    Functional description:
+    -----------------------
+    Until the PID regulator is enabled, the output is 0.0
+    The default range of the output from the PID regulator
+    is [0.0 .. 1.0] but it can be changed to [-1.0 .. 1.0]
 
-Special notes :
----------------
-The limit on the summarized error is set so that the iTerm
-will not exceed the maximum output of the regulator
+    Trimming the PID regulator:
+    ---------------------------
+    A simple method to achieve an initial, usable setting of
+    the PID regulator parameters is as follows:
+    - Set Kp, Ki, and Kd to zero.
+    - Gradually increase the Kp until the output of the PID regulator
+    becomes unstable.
+    Then use a value of Kp that is approximately 50% of this.
+    - Gradually increase the Ki until the output of the PID regulator
+    becomes unstable.
+    Then use a value of Ki that is approximately 80% of this.
+    - Gradually increase the Kd until the output of the PID regulator
+    becomes unstable.
+    Then use a value of Kd that is approximately 80% of this.
+    The PID regulator may afterwards need a mores specific adjustment
+    with respect to the actual regulation loop and it purpose.
+
+    Special notes:
+    --------------
+    The limit on the summarized error is set so that the iTerm
+    will not exceed the maximum output of the regulator
 */
 
 #include "PIDregulator.h"

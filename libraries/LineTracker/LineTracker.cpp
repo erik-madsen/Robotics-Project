@@ -2,8 +2,12 @@
     LineTracker.cpp
 
     Responsibility:
+    ---------------
     Provide the veichles position relative to a line using a row of optical sensors.
     The line tracking is based on the "torque" of a histogram representation of the inputs.
+
+    An instances of this class is an "active object" and
+    it's "Update" function must be called on a regular basis.
 */
 
 #include "LineTracker.h"
@@ -82,7 +86,7 @@ void LineTracker::Update
         sensor[i].inputValue *= sensor[i].sensorScaling;
     }
 
-#ifdef SIM_LINE_TRACKER
+#ifdef USE_LINE_TRACKER_SIMULATION
     SimulateInputs();
 #endif
 
@@ -163,7 +167,7 @@ void LineTracker::Update
 }
 
 
-#ifdef SIM_LINE_TRACKER
+#ifdef USE_LINE_TRACKER_SIMULATION
 void LineTracker::SimulateInputs
 //  --------------------------------------------------------------------------------
 (

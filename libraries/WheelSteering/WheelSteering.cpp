@@ -2,9 +2,13 @@
     WheelSteering.cpp
 
     Responsibility:
+    ---------------
     Control the steering wheels of the veichle based on a requested steering amount.
     The driver is assumed to use DOs controlling a pair of rather slowly reacting steering wheels.
     Hence the control is performing a "programmed PWM" with NO_OF_DUTY_CYCLES possible duty cycles.
+
+    An instances of this class is an "active object" and
+    it's "Update" function must be called on a regular basis.
 */
 
 #include "WheelSteering.h"

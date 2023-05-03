@@ -1,6 +1,5 @@
 /* 
-    PIDregulator.cpp
-    The file contains the definition of a PID regulator.
+    PIDregulator.h
 */
 
 #ifndef __PID_REGULATOR_H

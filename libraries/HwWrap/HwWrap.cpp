@@ -1,7 +1,9 @@
 /*
     HwWrap.cpp
 
-    A HW wrapper class for I/O etc.
+    Responsibility:
+    ---------------
+    Implement a HW wrapper class for I/O etc.
     The class uses the singleton pattern.
 */
 

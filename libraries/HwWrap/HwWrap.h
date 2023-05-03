@@ -1,13 +1,11 @@
 /* 
     HwWrap.h
-    A HW wrapper class for I/O etc.
-    The class uses the singleton pattern.
 */
-
-#include "stdint.h"
 
 #ifndef __HW_WRAP_H
 #define __HW_WRAP_H
+
+#include "stdint.h"
 
 #define NO_OF_SENSORS 5
 

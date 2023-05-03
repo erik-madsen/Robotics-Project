@@ -7,6 +7,7 @@
 #include "LineTracker.h"
 #include "WheelSteering.h"
 #include "PIDregulator.h"
+#include "SwTimer.h"
 
 #ifdef USE_SPEED_CONTROL
 static float aiA0;
@@ -27,16 +28,18 @@ static unsigned aiA1A0_last = 999;
 
 #ifdef USE_LINE_TRACKER
 LineTracker tracker;
-#define PRESCALER_TRACKER_COUNT 12
-unsigned prescalerTracker = PRESCALER_TRACKER_COUNT;
+SwTimer trackerTimer;
+#define TRACKER_TIMER_ONE_TICK_ONLY 1
+#define TRACKER_TIMER_PERIOD 60
 #endif
 
 
 #ifdef USE_STEERING
 WheelSteering steering;
 PIDregulator steeringPID;
-#define PRESCALER_STEERING_COUNT 1
-unsigned prescalerSteering = PRESCALER_STEERING_COUNT;
+SwTimer steeringTimer;
+#define STEERING_TIMER_ONE_TICK_ONLY 1
+#define STEERING_TIMER_PERIOD 5
 #endif
 
 float steeringSignal = 0.0;
@@ -49,12 +52,14 @@ void setup()
     HwWrap::GetInstance()->SteeringStraight();
 
     tracker.Init();
+    trackerTimer.TimerStart(TRACKER_TIMER_ONE_TICK_ONLY);
 
     steeringPID.SetRangeToIncludeMinusOne(1);
     steeringPID.SetKp(1.0); // 2.5
     steeringPID.SetKi(0.0); // 0.0
     steeringPID.SetKd(0.0); // 2.0
     steeringPID.Init();
+    steeringTimer.TimerStart(STEERING_TIMER_ONE_TICK_ONLY);
 
     HwWrap::GetInstance()->DebugNewLine();
     HwWrap::GetInstance()->DebugNewLine();
@@ -71,13 +76,14 @@ void loop()
     /* Control steering using the line tracker and a PID regulator */
 
 #ifdef USE_LINE_TRACKER
-    if (prescalerTracker++ >= (PRESCALER_TRACKER_COUNT-1))
+    trackerTimer.TimerTick();
+    if (trackerTimer.TimerEvent(TRACKER_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
-        prescalerTracker = 0;
-
         tracker.Update(&lineTrackedState, &trackedPosition);
 
+#ifdef USE_LINE_TRACKER_DEBUGGING
         tracker.DebugInfo();
+#endif
 
         switch (lineTrackedState)
         {
@@ -103,14 +109,15 @@ void loop()
 
 
 #ifdef USE_STEERING
-    if (prescalerSteering++ >= (PRESCALER_STEERING_COUNT-1))
+    steeringTimer.TimerTick();
+    if (steeringTimer.TimerEvent(STEERING_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
-        prescalerSteering = 0;
-
         steering.Update();
 
+#ifdef USE_STEERING_DEBUGGING
         // steeringPID.DebugInfo();
         steering.DebugInfo();
+#endif
     }
 #endif /* USE_STEERING */
 
@@ -172,6 +179,6 @@ void loop()
     analogWrite(motionInBDriveForwards, 25);
     delay(20);
 #else
-    delay(500);
+    delay(100);
 #endif
 }
