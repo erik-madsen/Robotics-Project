@@ -122,6 +122,29 @@ void WheelSteering::Update
     }
 }
 
+void WheelSteering::DebugInfoGraphics
+//  --------------------------------------------------------------------------------
+(
+    void
+)
+//  --------------------------------------------------------------------------------
+{
+    HwWrap::GetInstance()->DebugString("  ");
+    if (timeSlot < 10)
+        HwWrap::GetInstance()->DebugString(" ");
+    HwWrap::GetInstance()->DebugUnsigned(timeSlot);
+    HwWrap::GetInstance()->DebugString("  ");
+    HwWrap::GetInstance()->DebugFloat(float(timeSlot) / NO_OF_DUTY_CYCLES);
+
+    HwWrap::GetInstance()->DebugString("   ");
+    if (currentWheelPos == steeringDirection_STRAIGHT)
+        HwWrap::GetInstance()->DebugString("|| ----- ||");
+    else if (currentWheelPos == steeringDirection_LEFT)
+        HwWrap::GetInstance()->DebugString("\\\\ ----- \\\\");
+    else if (currentWheelPos == steeringDirection_RIGHT)
+        HwWrap::GetInstance()->DebugString("// ----- //");
+}
+
 void WheelSteering::DebugInfo
 //  --------------------------------------------------------------------------------
 (
@@ -140,26 +163,19 @@ void WheelSteering::DebugInfo
         if (steeringSignalInUse >= 0.0f)
             HwWrap::GetInstance()->DebugString(" ");
         HwWrap::GetInstance()->DebugFloat(steeringSignalInUse);
+
+#ifdef STEERING_USE_DEBUGGING_VERBOSE
+        DebugInfoGraphics();
+#endif
+        HwWrap::GetInstance()->DebugNewLine();
     }
     else
     {
+#ifdef STEERING_USE_DEBUGGING_VERBOSE
         HwWrap::GetInstance()->DebugString("                         ");
+        DebugInfoGraphics();
+        HwWrap::GetInstance()->DebugNewLine();
+#endif
     }
 
-    HwWrap::GetInstance()->DebugString("  ");
-    if (timeSlot < 10)
-        HwWrap::GetInstance()->DebugString(" ");
-    HwWrap::GetInstance()->DebugUnsigned(timeSlot);
-    HwWrap::GetInstance()->DebugString("  ");
-    HwWrap::GetInstance()->DebugFloat(float(timeSlot) / NO_OF_DUTY_CYCLES);
-
-    HwWrap::GetInstance()->DebugString("   ");
-    if (currentWheelPos == steeringDirection_STRAIGHT)
-        HwWrap::GetInstance()->DebugString("|| ----- ||");
-    else if (currentWheelPos == steeringDirection_LEFT)
-        HwWrap::GetInstance()->DebugString("\\\\ ----- \\\\");
-    else if (currentWheelPos == steeringDirection_RIGHT)
-        HwWrap::GetInstance()->DebugString("// ----- //");
-
-    HwWrap::GetInstance()->DebugNewLine();
 }

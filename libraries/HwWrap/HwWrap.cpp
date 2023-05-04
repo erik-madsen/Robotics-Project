@@ -92,8 +92,10 @@ void HwWrap::MotionStop
 )
 //  --------------------------------------------------------------------------------
 {
+#ifdef MOTION_CONTROL_USE_OUTPUTS
     digitalWrite(motionInADriveBackwards, LOW);
     digitalWrite(motionInBDriveForwards, LOW);
+#endif
 }
 
 void HwWrap::MotionFwd
@@ -103,8 +105,10 @@ void HwWrap::MotionFwd
 )
 //  --------------------------------------------------------------------------------
 {
+#ifdef MOTION_CONTROL_USE_OUTPUTS
     digitalWrite(motionInADriveBackwards, LOW);
     digitalWrite(motionInBDriveForwards, HIGH);
+#endif
 }
 
 void HwWrap::MotionBwd
@@ -114,8 +118,10 @@ void HwWrap::MotionBwd
 )
 //  --------------------------------------------------------------------------------
 {
+#ifdef MOTION_CONTROL_USE_OUTPUTS
     digitalWrite(motionInADriveBackwards, HIGH);
     digitalWrite(motionInBDriveForwards, LOW);
+#endif
 }
 
 
@@ -126,8 +132,10 @@ void HwWrap::SteeringStraight
 )
 //  --------------------------------------------------------------------------------
 {
+#ifdef STEERING_USE_OUTPUTS
     analogWrite(steeringInATurnRight, 0);
     analogWrite(steeringInBTurnLeft, 0);
+#endif
 }
 
 void HwWrap::SteeringRight
@@ -137,8 +145,10 @@ void HwWrap::SteeringRight
 )
 //  --------------------------------------------------------------------------------
 {
+#ifdef STEERING_USE_OUTPUTS
     analogWrite(steeringInATurnRight, (PWM_RANGE-1));
     analogWrite(steeringInBTurnLeft, 0);
+#endif
 }
 
 void HwWrap::SteeringLeft
@@ -148,8 +158,10 @@ void HwWrap::SteeringLeft
 )
 //  --------------------------------------------------------------------------------
 {
+#ifdef STEERING_USE_OUTPUTS
     analogWrite(steeringInATurnRight, 0);
     analogWrite(steeringInBTurnLeft, (PWM_RANGE-1));
+#endif
 }
 
 

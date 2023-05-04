@@ -7,10 +7,6 @@
 
 #include "Debug.h"
 
-#define steeringOffset_LEFT   (-0.4f)
-#define steeringOffset_CENTER ( 0.0f)
-#define steeringOffset_RIGHT  ( 0.4f)
-
 typedef enum
 {
     steeringDirection_STRAIGHT,
@@ -28,6 +24,7 @@ class WheelSteering
         void Update(void);
 
         void DebugInfo(void);
+        void DebugInfoGraphics(void);
 
     protected:
 

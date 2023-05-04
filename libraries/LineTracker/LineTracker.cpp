@@ -86,7 +86,7 @@ void LineTracker::Update
         sensor[i].inputValue *= sensor[i].sensorScaling;
     }
 
-#ifdef USE_LINE_TRACKER_SIMULATION
+#ifdef LINE_TRACKER_USE_SIMULATION
     SimulateInputs();
 #endif
 
@@ -167,7 +167,7 @@ void LineTracker::Update
 }
 
 
-#ifdef USE_LINE_TRACKER_SIMULATION
+#ifdef LINE_TRACKER_USE_SIMULATION
 void LineTracker::SimulateInputs
 //  --------------------------------------------------------------------------------
 (

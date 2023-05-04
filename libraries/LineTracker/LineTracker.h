@@ -53,7 +53,7 @@ class LineTracker
 
         lineState stateOfTracking  = lineState_UNDEFINED;
 
-#ifdef USE_LINE_TRACKER_SIMULATION
+#ifdef LINE_TRACKER_USE_SIMULATION
         char simIndicationPoints[(3*NO_OF_SENSORS + 1)];
         unsigned int simIndicationIndex = NO_OF_SENSORS;
         unsigned int simCountingDir = 0;

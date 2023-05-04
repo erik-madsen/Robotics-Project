@@ -9,7 +9,7 @@
 #include "PIDregulator.h"
 #include "SwTimer.h"
 
-#ifdef USE_SPEED_CONTROL
+#ifdef MOTION_CONTROL_IN_USE
 static float aiA0;
 static float aiA1;
 
@@ -23,43 +23,38 @@ static float aiA1_lim;
 
 static unsigned aiA1A0;
 static unsigned aiA1A0_last = 999;
-#endif /* USE_SPEED_CONTROL */
+#endif /* MOTION_CONTROL_IN_USE */
 
-
-#ifdef USE_LINE_TRACKER
 LineTracker tracker;
+PIDregulator trackerPID;
 SwTimer trackerTimer;
 #define TRACKER_TIMER_ONE_TICK_ONLY 1
 #define TRACKER_TIMER_PERIOD 60
-#endif
 
-
-#ifdef USE_STEERING
 WheelSteering steering;
-PIDregulator steeringPID;
 SwTimer steeringTimer;
 #define STEERING_TIMER_ONE_TICK_ONLY 1
 #define STEERING_TIMER_PERIOD 5
-#endif
 
 float steeringSignal = 0.0;
 
 void setup()
 {
-    Serial.begin(9600);
-    while (!Serial);
-
+    HwWrap::GetInstance()->MotionStop();
     HwWrap::GetInstance()->SteeringStraight();
 
     tracker.Init();
+    trackerPID.SetRangeToIncludeMinusOne(true);
+    trackerPID.SetKp(1.0); // 2.5
+    trackerPID.SetKi(0.0); // 0.0
+    trackerPID.SetKd(0.0); // 2.0
+    trackerPID.Init();
     trackerTimer.TimerStart(TRACKER_TIMER_ONE_TICK_ONLY);
 
-    steeringPID.SetRangeToIncludeMinusOne(1);
-    steeringPID.SetKp(1.0); // 2.5
-    steeringPID.SetKi(0.0); // 0.0
-    steeringPID.SetKd(0.0); // 2.0
-    steeringPID.Init();
     steeringTimer.TimerStart(STEERING_TIMER_ONE_TICK_ONLY);
+
+    Serial.begin(9600);
+    while (!Serial);
 
     HwWrap::GetInstance()->DebugNewLine();
     HwWrap::GetInstance()->DebugNewLine();
@@ -73,16 +68,26 @@ void loop()
     lineState lineTrackedState;
     float trackedPosition;
 
+#define lineOffset_LEFT   (-0.4f)
+#define lineOffset_CENTER ( 0.0f)
+#define lineOffset_RIGHT  ( 0.4f)
+
+    float lineOffset = lineOffset_LEFT;
+
     /* Control steering using the line tracker and a PID regulator */
 
-#ifdef USE_LINE_TRACKER
     trackerTimer.TimerTick();
     if (trackerTimer.TimerEvent(TRACKER_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
         tracker.Update(&lineTrackedState, &trackedPosition);
+        steeringSignal = trackerPID.Update(lineOffset - trackedPosition);
+        steering.Set(steeringSignal);
 
-#ifdef USE_LINE_TRACKER_DEBUGGING
+#ifdef LINE_TRACKER_USE_DEBUGGING
         tracker.DebugInfo();
+#ifdef LINE_TRACKER_USE_DEBUGGING_PID
+        trackerPID.DebugInfo();
+#endif
 #endif
 
         switch (lineTrackedState)
@@ -101,28 +106,21 @@ void loop()
             }
             break;
         }
-
-        steeringSignal = steeringPID.Update(steeringOffset_CENTER - trackedPosition);
-        steering.Set(steeringSignal);
     }
-#endif /* USE_LINE_TRACKER */
 
 
-#ifdef USE_STEERING
     steeringTimer.TimerTick();
     if (steeringTimer.TimerEvent(STEERING_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
         steering.Update();
 
-#ifdef USE_STEERING_DEBUGGING
-        // steeringPID.DebugInfo();
+#ifdef STEERING_USE_DEBUGGING
         steering.DebugInfo();
 #endif
     }
-#endif /* USE_STEERING */
 
 
-#ifdef USE_SPEED_CONTROL
+#ifdef MOTION_CONTROL_IN_USE
     {
         aiA0 = ((float)HwWrap::GetInstance()->AnalogInput(0) / ADC_RANGE);
         if (aiA0 > aiA0_max) aiA0_max = aiA0;
@@ -158,26 +156,22 @@ void loop()
             HwWrap::GetInstance()->DebugNewLine();
         }
     }
-#endif /* USE_SPEED_CONTROL */
+#endif /* MOTION_CONTROL_IN_USE */
 
 
-#define DEBUG_MODE 0
+#define MOTION_MODE 0
 
-    /* Driving */
-
-#if DEBUG_MODE==1
+#if MOTION_MODE==1
     HwWrap::GetInstance()->MotionFwd();
     delay(25);
     HwWrap::GetInstance()->MotionStop();
     delay(75);
-#elif DEBUG_MODE==2
-    delay(100);
-#elif DEBUG_MODE==3
-    delay(5000);
-#elif DEBUG_MODE==4
+#elif MOTION_MODE==2
+#ifdef MOTION_CONTROL_USE_OUTPUTS
     analogWrite(motionInADriveBackwards, 0);
     analogWrite(motionInBDriveForwards, 25);
-    delay(20);
+    delay(100);
+#endif
 #else
     delay(100);
 #endif
