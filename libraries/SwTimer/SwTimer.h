@@ -2,8 +2,7 @@
     SwTimer.h
 */
 
-#ifndef __SW_TIMER_H
-#define __SW_TIMER_H
+#pragma once
 
 typedef enum
 {
@@ -35,5 +34,3 @@ class SwTimer
         int timer;
 
 };
-
-#endif

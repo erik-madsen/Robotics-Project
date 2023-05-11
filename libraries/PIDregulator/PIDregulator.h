@@ -2,8 +2,7 @@
     PIDregulator.h
 */
 
-#ifndef __PID_REGULATOR_H
-#define __PID_REGULATOR_H
+#pragma once
 
 typedef struct
 {
@@ -55,5 +54,3 @@ class PIDregulator
         float errorLast;
         float output;
 };
-
-#endif

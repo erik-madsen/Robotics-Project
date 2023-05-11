@@ -2,8 +2,7 @@
     LineTracker.h
 */
 
-#ifndef __LINE_TRACKER_H
-#define __LINE_TRACKER_H
+#pragma once
 
 #include "Debug.h"
 #include "HwWrap.h"
@@ -61,5 +60,3 @@ class LineTracker
         void SimulateInputs(void);
 #endif
 };
-
-#endif

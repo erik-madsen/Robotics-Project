@@ -2,10 +2,10 @@
     WheelSteering.h
 */
 
-#ifndef __WHEEL_STEERING_H
-#define __WHEEL_STEERING_H
+#pragma once
 
 #include "Debug.h"
+#include "HwWrap.h"
 
 typedef enum
 {
@@ -29,11 +29,12 @@ class WheelSteering
     protected:
 
     private:
+        HwWrap_SteeringOutput output;
+
         float steeringSignalRequested;
         float steeringSignalInUse;
         steeringDirection currentDirection = steeringDirection_STRAIGHT;
         steeringDirection currentWheelPos = steeringDirection_STRAIGHT;
         unsigned timeSlot = 0;
-};
 
-#endif
+};

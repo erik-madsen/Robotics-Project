@@ -29,19 +29,21 @@ LineTracker tracker;
 PIDregulator trackerPID;
 SwTimer trackerTimer;
 #define TRACKER_TIMER_ONE_TICK_ONLY 1
-#define TRACKER_TIMER_PERIOD 60
+#define TRACKER_TIMER_PERIOD 12
 
 WheelSteering steering;
 SwTimer steeringTimer;
 #define STEERING_TIMER_ONE_TICK_ONLY 1
-#define STEERING_TIMER_PERIOD 5
-
+#define STEERING_TIMER_PERIOD 1
 float steeringSignal = 0.0;
+
+#ifdef MOTION_CONTROL_USE_OUTPUTS
+HwWrap_MotionOutput motionOutput;
+#endif
 
 void setup()
 {
-    HwWrap::GetInstance()->MotionStop();
-    HwWrap::GetInstance()->SteeringStraight();
+    motionOutput.MotionStop();
 
     tracker.Init();
     trackerPID.SetRangeToIncludeMinusOne(true);
@@ -72,7 +74,7 @@ void loop()
 #define lineOffset_CENTER ( 0.0f)
 #define lineOffset_RIGHT  ( 0.4f)
 
-    float lineOffset = lineOffset_LEFT;
+    float lineOffset = lineOffset_CENTER;
 
     /* Control steering using the line tracker and a PID regulator */
 
@@ -162,9 +164,9 @@ void loop()
 #define MOTION_MODE 0
 
 #if MOTION_MODE==1
-    HwWrap::GetInstance()->MotionFwd();
+    motionOutput.MotionFwd();
     delay(25);
-    HwWrap::GetInstance()->MotionStop();
+    motionOutput.MotionStop();
     delay(75);
 #elif MOTION_MODE==2
 #ifdef MOTION_CONTROL_USE_OUTPUTS
@@ -173,6 +175,6 @@ void loop()
     delay(100);
 #endif
 #else
-    delay(100);
+    delay(50);
 #endif
 }

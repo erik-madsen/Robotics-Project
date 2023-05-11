@@ -22,16 +22,6 @@ HwWrap::HwWrap
     my_instance = this;
 }
 
-void HwWrap::Init
-//  --------------------------------------------------------------------------------
-(
-    void
-)
-//  --------------------------------------------------------------------------------
-{
-}
-
-
 unsigned HwWrap::AnalogInput
 //  --------------------------------------------------------------------------------
 (
@@ -85,7 +75,7 @@ unsigned HwWrap::DigitalInput
 }
 
 
-void HwWrap::MotionStop
+void HwWrap_MotionOutput::MotionStop
 //  --------------------------------------------------------------------------------
 (
     void
@@ -98,7 +88,7 @@ void HwWrap::MotionStop
 #endif
 }
 
-void HwWrap::MotionFwd
+void HwWrap_MotionOutput::MotionFwd
 //  --------------------------------------------------------------------------------
 (
     void
@@ -111,7 +101,7 @@ void HwWrap::MotionFwd
 #endif
 }
 
-void HwWrap::MotionBwd
+void HwWrap_MotionOutput::MotionBwd
 //  --------------------------------------------------------------------------------
 (
     void
@@ -125,7 +115,7 @@ void HwWrap::MotionBwd
 }
 
 
-void HwWrap::SteeringStraight
+void HwWrap_SteeringOutput::SteeringStraight
 //  --------------------------------------------------------------------------------
 (
     void
@@ -138,7 +128,7 @@ void HwWrap::SteeringStraight
 #endif
 }
 
-void HwWrap::SteeringRight
+void HwWrap_SteeringOutput::SteeringRight
 //  --------------------------------------------------------------------------------
 (
     void
@@ -151,7 +141,7 @@ void HwWrap::SteeringRight
 #endif
 }
 
-void HwWrap::SteeringLeft
+void HwWrap_SteeringOutput::SteeringLeft
 //  --------------------------------------------------------------------------------
 (
     void

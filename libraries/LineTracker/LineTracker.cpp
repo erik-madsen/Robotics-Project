@@ -146,19 +146,18 @@ void LineTracker::Update
     {
         // Only the rightmost sensor is asserted
         stateOfTracking = lineState_TRACKED_TO_THE_RIGHT;
-        positionOfLine = 1.0;
+        positionOfLine = (centroid - CENTROID_VALUE_CENTER) / CENTROID_VALUE_CENTER;
     }
     else if (centroid <= CENTROID_VALUE_OF_LEFTMOST_SENSOR + (CENTROID_VALUE_OF_ONE_SENSOR_POSITION / 2))
     {
         // Only the leftmost sensor is asserted
         stateOfTracking = lineState_TRACKED_TO_THE_LEFT;
-        positionOfLine = -1.0;
+        positionOfLine = (centroid - CENTROID_VALUE_CENTER) / CENTROID_VALUE_CENTER;
     }
     else
     {
         // The line is present and tracked properly
         stateOfTracking = lineState_TRACKED;
-        // Set the position in the range [-0.5 - 0.5]
         positionOfLine = (centroid - CENTROID_VALUE_CENTER) / CENTROID_VALUE_CENTER;
     }
 
@@ -192,6 +191,7 @@ void LineTracker::SimulateInputs
     {
         simIndicationPoints[s] = 0;
     }
+
     // Simulate inputs of the imaginary line at the indicated position
     for (int a=0; a<NO_OF_SENSORS; a++)
     {
@@ -211,6 +211,7 @@ void LineTracker::SimulateInputs
         }
     }
 
+    // Update the simulated position
     if (simCountingDir == 0)
     {
         if (simIndicationIndex > 0)

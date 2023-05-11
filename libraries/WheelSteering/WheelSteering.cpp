@@ -16,7 +16,7 @@
 #include "HwWrap.h"
 #include "math.h"
 
-#define NO_OF_DUTY_CYCLES 5.0f
+#define NO_OF_DUTY_CYCLES 10.0f
 
 WheelSteering::WheelSteering
 //  --------------------------------------------------------------------------------
@@ -25,6 +25,7 @@ WheelSteering::WheelSteering
 )
 //  --------------------------------------------------------------------------------
 {
+    output.SteeringStraight();
 }
 
 void WheelSteering::Set
@@ -50,75 +51,92 @@ void WheelSteering::Update
 )
 //  --------------------------------------------------------------------------------
 {
-    // Control the "PWM periods"
+
+// @50ms     10%   20%   30%   40%   50%   60%   70%   80%   90%   100%
+//            50   100   150   200   250   300   350   400   450   500 ms
+//            |     |     |     |     |     |     |     |     |     |
+//  10:  _____ _____ _____ _____ _____ _____ _____ _____ _____ _____ ~~~>
+//  20:  ===== ##### ::::: ..... _____ _____ _____ _____ _____ _____ ~~~>
+//  40:  ===== ===== ===== ##### ::::: ..... _____ _____ _____ _____ ~~~>
+//  60:  ===== ===== ===== ===== ===== ##### ::::: ..... _____ _____ ~~~>
+//  80:  ===== ===== ===== ===== ===== ===== ===== ##### ::::: ..... ~~~>
+// 100:  ===== ===== ===== ===== ===== ===== ===== ===== ===== ===== ~~~>
+//
+// Stop steering one 50 ms timeslot earlier due to the
+// slow return of the wheels to the straight position.
+
 
     if (timeSlot++ >= unsigned(NO_OF_DUTY_CYCLES))
     {
+        // Start a "PWM period"
+
         timeSlot = 1;
 
         steeringSignalInUse = float( round(steeringSignalRequested * NO_OF_DUTY_CYCLES) ) / NO_OF_DUTY_CYCLES;
 
-        if (steeringSignalInUse >= (1.0f / NO_OF_DUTY_CYCLES))
+        if (steeringSignalInUse >= (0.5f / NO_OF_DUTY_CYCLES))
         {
             currentDirection = steeringDirection_RIGHT;
             currentWheelPos = steeringDirection_RIGHT;
-            HwWrap::GetInstance()->SteeringRight();
+            output.SteeringRight();
         }
-        else if (steeringSignalInUse <= -(1.0f / NO_OF_DUTY_CYCLES))
+        else if (steeringSignalInUse <= -(0.5f / NO_OF_DUTY_CYCLES))
         {
             currentDirection = steeringDirection_LEFT;
             currentWheelPos = steeringDirection_LEFT;
-            HwWrap::GetInstance()->SteeringLeft();
+            output.SteeringLeft();
         }
         else
         {
             currentDirection = steeringDirection_STRAIGHT;
             currentWheelPos = steeringDirection_STRAIGHT;
-            HwWrap::GetInstance()->SteeringStraight();
+            output.SteeringStraight();
         }
     }
-
-    // Control the "PWM duty cycle"
-
-    switch (currentDirection)
+    else
     {
-        case steeringDirection_RIGHT:
+        // Control the "PWM duty cycle"
+
+        switch (currentDirection)
         {
-            if ((float(timeSlot) / NO_OF_DUTY_CYCLES) <= steeringSignalInUse)
+            case steeringDirection_RIGHT:
             {
-                HwWrap::GetInstance()->SteeringRight();
-                currentWheelPos = steeringDirection_RIGHT;
+                if ((float(timeSlot) / NO_OF_DUTY_CYCLES) < steeringSignalInUse)
+                {
+                    output.SteeringRight();
+                    currentWheelPos = steeringDirection_RIGHT;
+                }
+                else
+                {
+                    output.SteeringStraight();
+                    currentWheelPos = steeringDirection_STRAIGHT;
+                }
             }
-            else
+            break;
+
+            case steeringDirection_LEFT:
             {
-                HwWrap::GetInstance()->SteeringStraight();
+                if ((float(timeSlot) / NO_OF_DUTY_CYCLES) < -steeringSignalInUse)
+                {
+                    output.SteeringLeft();
+                    currentWheelPos = steeringDirection_LEFT;
+                }
+                else
+                {
+                    output.SteeringStraight();
+                    currentWheelPos = steeringDirection_STRAIGHT;
+                }
+            }
+            break;
+
+            case steeringDirection_STRAIGHT:
+            default:
+            {
+                output.SteeringStraight();
                 currentWheelPos = steeringDirection_STRAIGHT;
             }
+            break;
         }
-        break;
-
-        case steeringDirection_LEFT:
-        {
-            if ((float(timeSlot) / NO_OF_DUTY_CYCLES) <= -steeringSignalInUse)
-            {
-                HwWrap::GetInstance()->SteeringLeft();
-                currentWheelPos = steeringDirection_LEFT;
-            }
-            else
-            {
-                HwWrap::GetInstance()->SteeringStraight();
-                currentWheelPos = steeringDirection_STRAIGHT;
-            }
-        }
-        break;
-
-        case steeringDirection_STRAIGHT:
-        default:
-        {
-            HwWrap::GetInstance()->SteeringStraight();
-            currentWheelPos = steeringDirection_STRAIGHT;
-        }
-        break;
     }
 }
 

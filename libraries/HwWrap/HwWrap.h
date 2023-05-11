@@ -2,8 +2,7 @@
     HwWrap.h
 */
 
-#ifndef __HW_WRAP_H
-#define __HW_WRAP_H
+#pragma once
 
 #include "stdint.h"
 
@@ -28,20 +27,10 @@ class HwWrap
     public:
         static HwWrap* GetInstance() { return my_instance; };
 
-        void Init(void);
-
         unsigned AnalogInput(uint8_t inputNo);
         void AnalogOutput(uint8_t outputNo, unsigned int value);
 
         unsigned DigitalInput(uint8_t inputNo);
-
-        void MotionStop(void);
-        void MotionFwd(void);
-        void MotionBwd(void);
-
-        void SteeringStraight(void);
-        void SteeringRight(void);
-        void SteeringLeft(void);
 
         void DebugString(const char *string);
         void DebugUnsigned(unsigned value);
@@ -56,4 +45,20 @@ class HwWrap
 
 };
 
-#endif
+class HwWrap_MotionOutput
+{
+    public:
+        void MotionStop(void);
+        void MotionFwd(void);
+        void MotionBwd(void);
+
+};
+
+class HwWrap_SteeringOutput
+{
+    public:
+        void SteeringStraight(void);
+        void SteeringRight(void);
+        void SteeringLeft(void);
+
+};
