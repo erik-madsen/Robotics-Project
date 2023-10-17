@@ -6,10 +6,11 @@
 #include "HwWrap.h"
 #include "LineTracker.h"
 #include "WheelSteering.h"
+#include "VelocityControl.h"
 #include "PIDregulator.h"
 #include "SwTimer.h"
 
-#ifdef MOTION_CONTROL_IN_USE
+#ifdef VELOCITY_IN_USE
 static float aiA0;
 static float aiA1;
 
@@ -23,7 +24,7 @@ static float aiA1_lim;
 
 static unsigned aiA1A0;
 static unsigned aiA1A0_last = 999;
-#endif /* MOTION_CONTROL_IN_USE */
+#endif /* VELOCITY_IN_USE */
 
 LineTracker tracker;
 PIDregulator trackerPID;
@@ -37,13 +38,40 @@ SwTimer steeringTimer;
 #define STEERING_TIMER_PERIOD 1
 float steeringSignal = 0.0;
 
-#ifdef MOTION_CONTROL_USE_OUTPUTS
-HwWrap_MotionOutput motionOutput;
+VelocityControl velocity;
+PIDregulator velocityPID;
+SwTimer velocityTimer;
+#define VELOCITY_TIMER_ONE_TICK_ONLY 1
+#define VELOCITY_TIMER_PERIOD 2
+float currentVelocity = 0.0;
+float velocitySignal = 0.0;
+
+#define VELOCITY_TEST_VELOCITY 0.5
+#define VELOCITY_TEST_RAMP 0.01
+#define VELOCITY_TEST_COUNT_IN_EACH_DIRECTION 100
+
+#ifdef VELOCITY_USE_OUTPUTS
+HwWrap_VelocityOutput velocityOutput;
 #endif
+
+unsigned long timeStart_SystemTimeTick = 0;
+unsigned long timeLimit_SystemTimeTick = 50;
+
 
 void setup()
 {
-    motionOutput.MotionStop();
+    analogWrite(steeringInATurnRight, 0);
+    analogWrite(steeringInBTurnLeft, 0);
+    analogWrite(velocityInADriveBackwards, 0);
+    analogWrite(velocityInBDriveForwards, 0);
+
+
+    velocityPID.SetRangeToIncludeMinusOne(true);
+    velocityPID.Init();
+    velocityPID.SetKp(0.4);
+    velocityPID.SetKi(0.6);
+    velocityPID.SetKd(0.02);
+    velocityTimer.TimerStart(VELOCITY_TIMER_ONE_TICK_ONLY);
 
     tracker.Init();
     trackerPID.SetRangeToIncludeMinusOne(true);
@@ -63,22 +91,51 @@ void setup()
     HwWrap::GetInstance()->DebugString("--------------------  Restarted  --------------------");
     HwWrap::GetInstance()->DebugNewLine();
     HwWrap::GetInstance()->DebugNewLine();
+
+    velocity.Set(VELOCITY_TEST_VELOCITY, VELOCITY_TEST_RAMP);
 }
 
 void loop()
 {
+    if (millis() - timeStart_SystemTimeTick > timeLimit_SystemTimeTick)
+    {
+        timeStart_SystemTimeTick = millis();
+
+        velocityTimer.TimerTick();
+        trackerTimer.TimerTick();
+        steeringTimer.TimerTick();
+    }
+
     lineState lineTrackedState;
     float trackedPosition;
 
-#define lineOffset_LEFT   (-0.4f)
-#define lineOffset_CENTER ( 0.0f)
-#define lineOffset_RIGHT  ( 0.4f)
+#define lineOffset_LEFT   (-0.4)
+#define lineOffset_CENTER ( 0.0)
+#define lineOffset_RIGHT  ( 0.4)
 
     float lineOffset = lineOffset_CENTER;
 
+    /* Control velocity */
+
+    if (velocityTimer.TimerEvent(VELOCITY_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+    {
+        float setPoint = velocity.Update();
+        velocitySignal = velocityPID.Update(setPoint - currentVelocity);
+
+#ifdef VELOCITY_USE_OUTPUTS
+        if      (velocitySignal > 0.0) velocityOutput.VelocityFwd( velocitySignal);
+        else if (velocitySignal < 0.0) velocityOutput.VelocityBwd(-velocitySignal);
+        else velocityOutput.VelocityStop();
+#endif
+
+#ifdef VELOCITY_USE_DEBUGGING
+        velocity.DebugInfo();
+#ifdef VELOCITY_USE_DEBUGGING_PID
+        velocityPID.DebugInfo();
+#endif
+#endif
     /* Control steering using the line tracker and a PID regulator */
 
-    trackerTimer.TimerTick();
     if (trackerTimer.TimerEvent(TRACKER_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
         tracker.Update(&lineTrackedState, &trackedPosition);
@@ -111,7 +168,6 @@ void loop()
     }
 
 
-    steeringTimer.TimerTick();
     if (steeringTimer.TimerEvent(STEERING_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
         steering.Update();
@@ -122,7 +178,7 @@ void loop()
     }
 
 
-#ifdef MOTION_CONTROL_IN_USE
+#ifdef VELOCITY_IN_USE
     {
         aiA0 = ((float)HwWrap::GetInstance()->AnalogInput(0) / ADC_RANGE);
         if (aiA0 > aiA0_max) aiA0_max = aiA0;
@@ -158,23 +214,5 @@ void loop()
             HwWrap::GetInstance()->DebugNewLine();
         }
     }
-#endif /* MOTION_CONTROL_IN_USE */
-
-
-#define MOTION_MODE 0
-
-#if MOTION_MODE==1
-    motionOutput.MotionFwd();
-    delay(25);
-    motionOutput.MotionStop();
-    delay(75);
-#elif MOTION_MODE==2
-#ifdef MOTION_CONTROL_USE_OUTPUTS
-    analogWrite(motionInADriveBackwards, 0);
-    analogWrite(motionInBDriveForwards, 25);
-    delay(100);
-#endif
-#else
-    delay(50);
-#endif
+#endif /* VELOCITY_IN_USE */
 }

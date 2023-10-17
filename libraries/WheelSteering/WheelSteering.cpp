@@ -3,7 +3,7 @@
 
     Responsibility:
     ---------------
-    Control the steering wheels of the veichle based on a requested steering amount.
+    Control the steering wheels of the vehicle based on a requested steering fraction.
     The driver is assumed to use DOs controlling a pair of rather slowly reacting steering wheels.
     Hence the control is performing a "programmed PWM" with NO_OF_DUTY_CYCLES possible duty cycles.
 
@@ -16,7 +16,7 @@
 #include "HwWrap.h"
 #include "math.h"
 
-#define NO_OF_DUTY_CYCLES 10.0f
+#define NO_OF_DUTY_CYCLES 10.0
 
 WheelSteering::WheelSteering
 //  --------------------------------------------------------------------------------
@@ -31,7 +31,7 @@ WheelSteering::WheelSteering
 void WheelSteering::Set
 //  --------------------------------------------------------------------------------
 (
-    float steeringRequest  // The requested steering amount of the veichle
+    float steeringRequest  // The requested steering fraction of the vehicle
 )
 //  --------------------------------------------------------------------------------
 {
@@ -74,17 +74,17 @@ void WheelSteering::Update
 
         steeringSignalInUse = float( round(steeringSignalRequested * NO_OF_DUTY_CYCLES) ) / NO_OF_DUTY_CYCLES;
 
-        if (steeringSignalInUse >= (0.5f / NO_OF_DUTY_CYCLES))
+        if (steeringSignalInUse >= (0.5 / NO_OF_DUTY_CYCLES))
         {
             currentDirection = steeringDirection_RIGHT;
             currentWheelPos = steeringDirection_RIGHT;
-            output.SteeringRight();
+            output.SteeringRight(1.0);
         }
-        else if (steeringSignalInUse <= -(0.5f / NO_OF_DUTY_CYCLES))
+        else if (steeringSignalInUse <= -(0.5 / NO_OF_DUTY_CYCLES))
         {
             currentDirection = steeringDirection_LEFT;
             currentWheelPos = steeringDirection_LEFT;
-            output.SteeringLeft();
+            output.SteeringLeft(1.0);
         }
         else
         {
@@ -103,7 +103,7 @@ void WheelSteering::Update
             {
                 if ((float(timeSlot) / NO_OF_DUTY_CYCLES) < steeringSignalInUse)
                 {
-                    output.SteeringRight();
+                    output.SteeringRight(1.0);
                     currentWheelPos = steeringDirection_RIGHT;
                 }
                 else
@@ -118,7 +118,7 @@ void WheelSteering::Update
             {
                 if ((float(timeSlot) / NO_OF_DUTY_CYCLES) < -steeringSignalInUse)
                 {
-                    output.SteeringLeft();
+                    output.SteeringLeft(1.0);
                     currentWheelPos = steeringDirection_LEFT;
                 }
                 else
@@ -173,12 +173,12 @@ void WheelSteering::DebugInfo
     if (timeSlot == 1)
     {
         HwWrap::GetInstance()->DebugString(" Steering: ");
-        if (steeringSignalInUse >= 0.0f)
+        if (steeringSignalInUse >= 0.0)
             HwWrap::GetInstance()->DebugString(" ");
         HwWrap::GetInstance()->DebugFloat(steeringSignalRequested);
 
         HwWrap::GetInstance()->DebugString(" -> ");
-        if (steeringSignalInUse >= 0.0f)
+        if (steeringSignalInUse >= 0.0)
             HwWrap::GetInstance()->DebugString(" ");
         HwWrap::GetInstance()->DebugFloat(steeringSignalInUse);
 

@@ -20,7 +20,7 @@ class WheelSteering
     public:
         WheelSteering(void);
 
-        void Set(float steeringSignal);
+        void Set(float steeringRequest);
         void Update(void);
 
         void DebugInfo(void);

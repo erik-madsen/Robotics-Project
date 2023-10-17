@@ -20,14 +20,14 @@
     the PID regulator parameters is as follows:
     - Set Kp, Ki, and Kd to zero.
     - Gradually increase the Kp until the output of the PID regulator
-    becomes unstable.
-    Then use a value of Kp that is approximately 50% of this.
+      becomes unstable.
+      Then use a value of Kp that is approximately 50% of this.
     - Gradually increase the Ki until the output of the PID regulator
-    becomes unstable.
-    Then use a value of Ki that is approximately 80% of this.
+      becomes unstable.
+      Then use a value of Ki that is approximately 80% of this.
     - Gradually increase the Kd until the output of the PID regulator
-    becomes unstable.
-    Then use a value of Kd that is approximately 80% of this.
+      becomes unstable.
+      Then use a value of Kd that is approximately 80% of this.
     The PID regulator may afterwards need a mores specific adjustment
     with respect to the actual regulation loop and it purpose.
 
@@ -55,9 +55,9 @@ PIDregulator::PIDregulator
     Ki = 0.05f;
     Kd = 0.00f;
 
-    errorSum = 0.0f;
-    errorSumMax = 1.0f / Ki;
-    errorLast = 0.0f;
+    errorSum = 0.0;
+    errorSumMax = 1.0 / Ki;
+    errorLast = 0.0;
 }
 
 void PIDregulator::ResetInternalValues
@@ -67,9 +67,9 @@ void PIDregulator::ResetInternalValues
 )
 //  --------------------------------------------------------------------------------
 {
-    errorSum = 0.0f;
-    errorSumMax = 1.0f / Ki;
-    errorLast = 0.0f;
+    errorSum = 0.0;
+    errorSumMax = 1.0 / Ki;
+    errorLast = 0.0;
 }
 
 void PIDregulator::Init
@@ -207,8 +207,12 @@ void PIDregulator::DebugInfo
 {
     HwWrap::GetInstance()->DebugString(" PID:  ");
     HwWrap::GetInstance()->DebugString("error ");
+    if (errorLast >= 0.0)
+        HwWrap::GetInstance()->DebugString(" ");
     HwWrap::GetInstance()->DebugFloat(errorLast);
     HwWrap::GetInstance()->DebugString("  output ");
+    if (output >= 0.0)
+        HwWrap::GetInstance()->DebugString(" ");
     HwWrap::GetInstance()->DebugFloat(output);
     HwWrap::GetInstance()->DebugNewLine();
 }

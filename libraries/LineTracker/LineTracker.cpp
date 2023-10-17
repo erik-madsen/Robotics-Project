@@ -3,7 +3,7 @@
 
     Responsibility:
     ---------------
-    Provide the veichles position relative to a line using a row of optical sensors.
+    Provide the vehicles position relative to a line using a row of optical sensors.
     The line tracking is based on the "torque" of a histogram representation of the inputs.
 
     An instances of this class is an "active object" and
@@ -39,24 +39,24 @@ void LineTracker::Init
     sensor[3].pinNo = ANALOG_INPUT_3;
     sensor[4].pinNo = ANALOG_INPUT_4;
 
-    sensor[0].sensorBias = 0.09;
-    sensor[1].sensorBias = 0.04;
-    sensor[2].sensorBias = 0.17;
-    sensor[3].sensorBias = 0.11;
-    sensor[4].sensorBias = 0.19;
+    sensor[0].sensorBias = 0.00;
+    sensor[1].sensorBias = 0.00;
+    sensor[2].sensorBias = 0.00;
+    sensor[3].sensorBias = 0.00;
+    sensor[4].sensorBias = 0.00;
 
-    sensor[0].sensorScaling = 1.00 / 1.00;
-    sensor[1].sensorScaling = 1.00 / 1.00;
-    sensor[2].sensorScaling = 1.00 / 1.00;
-    sensor[3].sensorScaling = 1.00 / 1.00;
-    sensor[4].sensorScaling = 1.00 / 1.00;
+    sensor[0].sensorScaling = 1.00;
+    sensor[1].sensorScaling = 1.00;
+    sensor[2].sensorScaling = 1.00;
+    sensor[3].sensorScaling = 1.00;
+    sensor[4].sensorScaling = 1.00;
 }
 
 void LineTracker::Update
 //  --------------------------------------------------------------------------------
 (
     lineState *lineState,   // Current state of the line tracking
-    float *veichlePosition  // Current position of the veichle relative to the line
+    float *vehiclePosition  // Current position of the vehicle relative to the line
 )
 //  --------------------------------------------------------------------------------
 {
@@ -161,7 +161,7 @@ void LineTracker::Update
         positionOfLine = (centroid - CENTROID_VALUE_CENTER) / CENTROID_VALUE_CENTER;
     }
 
-    *veichlePosition = -positionOfLine;
+    *vehiclePosition = -positionOfLine;
     *lineState = stateOfTracking;
 }
 
@@ -181,7 +181,7 @@ void LineTracker::SimulateInputs
     //   v         v
     //   .....=====.....    Moving line to track
     //
-    //     || ***** ||      Line tracker on the veichle
+    //     || ***** ||      Line tracker on the vehicle
     // 
     // Dynamically let the '=' move sidewards and
     // use their positions to simulate the input values.
@@ -267,6 +267,16 @@ void LineTracker::DebugInfo
 
     HwWrap::GetInstance()->DebugNewLine();
 
+#ifdef LINE_TRACKER_USE_DEBUGGING_VERBOSE
+    HwWrap::GetInstance()->DebugString(" inputValue:");
+    for (i=0; i<NO_OF_SENSORS; i++)
+    {
+        HwWrap::GetInstance()->DebugString("  ");
+        HwWrap::GetInstance()->DebugFloat(sensor[i].inputValue);
+    }
+    HwWrap::GetInstance()->DebugNewLine();
+#endif
+
     HwWrap::GetInstance()->DebugString(" Torque:  ");
     HwWrap::GetInstance()->DebugFloat(torque);
     HwWrap::GetInstance()->DebugString("   Centroid:  ");
@@ -304,7 +314,7 @@ void LineTracker::DebugInfo
     HwWrap::GetInstance()->DebugString(" Mass:    ");
     HwWrap::GetInstance()->DebugFloat(mass);
     HwWrap::GetInstance()->DebugString("   Line pos: ");
-    if (positionOfLine >= 0.0f)
+    if (positionOfLine >= 0.0)
         HwWrap::GetInstance()->DebugString(" ");
     HwWrap::GetInstance()->DebugFloat(positionOfLine);
     HwWrap::GetInstance()->DebugString("         ^^^^^");

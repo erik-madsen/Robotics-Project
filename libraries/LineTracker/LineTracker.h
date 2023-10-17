@@ -25,7 +25,7 @@ class LineTracker
         LineTracker(void);
 
         void Init(void);
-        void Update(lineState *lineState, float *veichlePosition);
+        void Update(lineState *lineState, float *vehiclePosition);
 
         void DebugInfo(void);
 

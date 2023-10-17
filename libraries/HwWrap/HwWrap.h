@@ -19,8 +19,8 @@
 
 #define steeringInATurnRight    7
 #define steeringInBTurnLeft     6
-#define motionInADriveBackwards 4
-#define motionInBDriveForwards  5
+#define velocityInADriveBackwards 4
+#define velocityInBDriveForwards  5
 
 class HwWrap
 {
@@ -45,12 +45,12 @@ class HwWrap
 
 };
 
-class HwWrap_MotionOutput
+class HwWrap_VelocityOutput
 {
     public:
-        void MotionStop(void);
-        void MotionFwd(void);
-        void MotionBwd(void);
+        void VelocityStop(void);
+        void VelocityFwd(float fraction);
+        void VelocityBwd(float fraction);
 
 };
 
@@ -58,7 +58,7 @@ class HwWrap_SteeringOutput
 {
     public:
         void SteeringStraight(void);
-        void SteeringRight(void);
-        void SteeringLeft(void);
+        void SteeringRight(float fraction);
+        void SteeringLeft(float fraction);
 
 };

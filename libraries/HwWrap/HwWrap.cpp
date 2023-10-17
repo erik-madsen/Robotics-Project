@@ -75,42 +75,42 @@ unsigned HwWrap::DigitalInput
 }
 
 
-void HwWrap_MotionOutput::MotionStop
+void HwWrap_VelocityOutput::VelocityStop
 //  --------------------------------------------------------------------------------
 (
     void
 )
 //  --------------------------------------------------------------------------------
 {
-#ifdef MOTION_CONTROL_USE_OUTPUTS
-    digitalWrite(motionInADriveBackwards, LOW);
-    digitalWrite(motionInBDriveForwards, LOW);
+#ifdef VELOCITY_USE_OUTPUTS
+    analogWrite(velocityInADriveBackwards, 0);
+    analogWrite(velocityInBDriveForwards, 0);
 #endif
 }
 
-void HwWrap_MotionOutput::MotionFwd
+void HwWrap_VelocityOutput::VelocityFwd
 //  --------------------------------------------------------------------------------
 (
-    void
+    float fraction
 )
 //  --------------------------------------------------------------------------------
 {
-#ifdef MOTION_CONTROL_USE_OUTPUTS
-    digitalWrite(motionInADriveBackwards, LOW);
-    digitalWrite(motionInBDriveForwards, HIGH);
+#ifdef VELOCITY_USE_OUTPUTS
+    analogWrite(velocityInADriveBackwards, 0);
+    analogWrite(velocityInBDriveForwards, (unsigned char)(float(PWM_RANGE-1) * fraction));
 #endif
 }
 
-void HwWrap_MotionOutput::MotionBwd
+void HwWrap_VelocityOutput::VelocityBwd
 //  --------------------------------------------------------------------------------
 (
-    void
+    float fraction
 )
 //  --------------------------------------------------------------------------------
 {
-#ifdef MOTION_CONTROL_USE_OUTPUTS
-    digitalWrite(motionInADriveBackwards, HIGH);
-    digitalWrite(motionInBDriveForwards, LOW);
+#ifdef VELOCITY_USE_OUTPUTS
+    analogWrite(velocityInADriveBackwards, (unsigned char)(float(PWM_RANGE-1) * fraction));
+    analogWrite(velocityInBDriveForwards, 0);
 #endif
 }
 
@@ -131,12 +131,12 @@ void HwWrap_SteeringOutput::SteeringStraight
 void HwWrap_SteeringOutput::SteeringRight
 //  --------------------------------------------------------------------------------
 (
-    void
+    float fraction
 )
 //  --------------------------------------------------------------------------------
 {
 #ifdef STEERING_USE_OUTPUTS
-    analogWrite(steeringInATurnRight, (PWM_RANGE-1));
+    analogWrite(steeringInATurnRight, (unsigned char)(float(PWM_RANGE-1) * fraction));
     analogWrite(steeringInBTurnLeft, 0);
 #endif
 }
@@ -144,13 +144,13 @@ void HwWrap_SteeringOutput::SteeringRight
 void HwWrap_SteeringOutput::SteeringLeft
 //  --------------------------------------------------------------------------------
 (
-    void
+    float fraction
 )
 //  --------------------------------------------------------------------------------
 {
 #ifdef STEERING_USE_OUTPUTS
     analogWrite(steeringInATurnRight, 0);
-    analogWrite(steeringInBTurnLeft, (PWM_RANGE-1));
+    analogWrite(steeringInBTurnLeft, (unsigned char)(float(PWM_RANGE-1) * fraction));
 #endif
 }
 
