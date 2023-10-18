@@ -17,8 +17,11 @@
 #define ADC_RANGE 1024
 #define PWM_RANGE 256
 
-#define steeringInATurnRight    7
-#define steeringInBTurnLeft     6
+#define velocityTachoInA          2
+#define velocityTachoInB          3
+
+#define steeringInATurnRight      7
+#define steeringInBTurnLeft       6
 #define velocityInADriveBackwards 4
 #define velocityInBDriveForwards  5
 

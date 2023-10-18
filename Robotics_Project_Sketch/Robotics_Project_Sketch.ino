@@ -10,21 +10,11 @@
 #include "PIDregulator.h"
 #include "SwTimer.h"
 
-#ifdef VELOCITY_IN_USE
-static float aiA0;
-static float aiA1;
-
-static float aiA0_max = 0.0;
-static float aiA0_min = 1.0;
-static float aiA0_lim;
-
-static float aiA1_max = 0.0;
-static float aiA1_min = 1.0;
-static float aiA1_lim;
-
-static unsigned aiA1A0;
-static unsigned aiA1A0_last = 999;
-#endif /* VELOCITY_IN_USE */
+static unsigned ISR_velocityTachoInA_level;
+static unsigned ISR_velocityTachoInB_level;
+static unsigned ISR_velocityTachoCounter;
+static unsigned velocityTachoCounter;
+static unsigned velocityTachoCounter_last = velocityTachoCounter;
 
 LineTracker tracker;
 PIDregulator trackerPID;
@@ -58,8 +48,42 @@ unsigned long timeStart_SystemTimeTick = 0;
 unsigned long timeLimit_SystemTimeTick = 50;
 
 
+void ISR_velocityTachoInA(void)
+{
+    ISR_velocityTachoInA_level = HwWrap::GetInstance()->DigitalInput(velocityTachoInA);
+
+    if (ISR_velocityTachoInA_level == ISR_velocityTachoInB_level)
+    {
+        ISR_velocityTachoCounter--;
+    }
+    else
+    {
+        ISR_velocityTachoCounter++;
+    }
+}
+
+void ISR_velocityTachoInB(void)
+{
+    ISR_velocityTachoInB_level = HwWrap::GetInstance()->DigitalInput(velocityTachoInB);
+
+    if (ISR_velocityTachoInA_level == ISR_velocityTachoInB_level)
+    {
+        ISR_velocityTachoCounter++;
+    }
+    else
+    {
+        ISR_velocityTachoCounter--;
+    }
+}
+
+
 void setup()
 {
+    pinMode(velocityTachoInA, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(velocityTachoInA), ISR_velocityTachoInA, CHANGE);
+    pinMode(velocityTachoInB, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(velocityTachoInB), ISR_velocityTachoInB, CHANGE);
+
     analogWrite(steeringInATurnRight, 0);
     analogWrite(steeringInBTurnLeft, 0);
     analogWrite(velocityInADriveBackwards, 0);
