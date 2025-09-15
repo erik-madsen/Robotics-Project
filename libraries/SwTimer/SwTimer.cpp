@@ -40,7 +40,6 @@ void SwTimer::TimerStop
     timer = swTimerValue_STOPPED;
 }
 
-
 void SwTimer::TimerTick
 //  --------------------------------------------------------------------------------
 (

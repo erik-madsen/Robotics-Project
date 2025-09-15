@@ -10,3 +10,5 @@
 #define TRUE  1
 
 typedef unsigned t_boolean;
+
+#define EPSILON 0.001

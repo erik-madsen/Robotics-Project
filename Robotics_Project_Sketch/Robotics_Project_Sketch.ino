@@ -3,6 +3,7 @@
 */
 
 #include "Debug.h"
+#include "Common.h"
 #include "HwWrap.h"
 #include "LineTracker.h"
 #include "WheelSteering.h"
@@ -10,43 +11,71 @@
 #include "PIDregulator.h"
 #include "SwTimer.h"
 
-static unsigned ISR_velocityTachoInA_level;
-static unsigned ISR_velocityTachoInB_level;
-static unsigned ISR_velocityTachoCounter;
-static unsigned velocityTachoCounter;
-static unsigned velocityTachoCounter_last = velocityTachoCounter;
+static volatile unsigned ISR_velocityTachoInA_level;
+static volatile unsigned ISR_velocityTachoInB_level;
+static volatile unsigned ISR_velocityTachoQuadratureCounter;
+static volatile int ISR_velocityTachoDirection;
+static unsigned long ISR_velocityTachoMagnetTime;
+static unsigned long ISR_velocityTachoMagnetTimeLast;
+
+#define SYSTEM_TIME_TICK_BASE 50
+#define SYSTEM_TIME_ms  1/SYSTEM_TIME_TICK_BASE
+#define SYSTEM_TIME_sec 1000/SYSTEM_TIME_TICK_BASE
+unsigned long timeStart_SystemTimeTick = 0;
+unsigned long timeLimit_SystemTimeTick = SYSTEM_TIME_TICK_BASE;
+
+#define VELOCITY_TACHO_NUMBER_OF_MAGNETS 10
+#define VELOCITY_TACHO_QUADRATURES_PER_MAGNET 4
+
+#define VELOCITY_TEST_VELOCITY 0.4
+#define VELOCITY_TEST_RAMP 0.02
+
+SwTimer tachoTimer;
+#define TACHO_MAX_SPEED_ROTATION_TIME  140 // ~ 429 RPM
+#define TACHO_MIN_SPEED_ROTATION_TIME 3160 // ~  19 RPM
+#define TACHO_STOPPED_ROTATION_TIME 99999
+#define TACHO_TIMEOUT_PERIOD  TACHO_MIN_SPEED_ROTATION_TIME / VELOCITY_TACHO_NUMBER_OF_MAGNETS * 2 * SYSTEM_TIME_ms
+static volatile unsigned velocityTachoQuadratureCounter;
+static volatile unsigned velocityTachoQuadratureCounterLast;
 
 LineTracker tracker;
 PIDregulator trackerPID;
 SwTimer trackerTimer;
 #define TRACKER_TIMER_ONE_TICK_ONLY 1
-#define TRACKER_TIMER_PERIOD 12
+#define TRACKER_TIMER_PERIOD  600 * SYSTEM_TIME_ms
 
 WheelSteering steering;
 SwTimer steeringTimer;
 #define STEERING_TIMER_ONE_TICK_ONLY 1
-#define STEERING_TIMER_PERIOD 1
+#define STEERING_TIMER_PERIOD  50 * SYSTEM_TIME_ms
 float steeringSignal = 0.0;
 
 VelocityControl velocity;
 PIDregulator velocityPID;
 SwTimer velocityTimer;
 #define VELOCITY_TIMER_ONE_TICK_ONLY 1
-#define VELOCITY_TIMER_PERIOD 2
+#define VELOCITY_TIMER_PERIOD  50 * SYSTEM_TIME_ms
+float setPoint;
+unsigned long currentRotationTime_ms;
 float currentVelocity = 0.0;
 float velocitySignal = 0.0;
 
-#define VELOCITY_TEST_VELOCITY 0.5
-#define VELOCITY_TEST_RAMP 0.01
-#define VELOCITY_TEST_COUNT_IN_EACH_DIRECTION 100
 
 #ifdef VELOCITY_USE_OUTPUTS
 HwWrap_VelocityOutput velocityOutput;
 #endif
 
-unsigned long timeStart_SystemTimeTick = 0;
-unsigned long timeLimit_SystemTimeTick = 50;
 
+void ISR_velocityTachoCommon(void)
+{
+    // Measure the time per revolution of the wheels
+    if (ISR_velocityTachoInA_level == 1 && ISR_velocityTachoInB_level == 1)
+    {
+        unsigned long t = millis();
+        ISR_velocityTachoMagnetTime = t - ISR_velocityTachoMagnetTimeLast;
+        ISR_velocityTachoMagnetTimeLast = t;
+    }
+}
 
 void ISR_velocityTachoInA(void)
 {
@@ -54,12 +83,16 @@ void ISR_velocityTachoInA(void)
 
     if (ISR_velocityTachoInA_level == ISR_velocityTachoInB_level)
     {
-        ISR_velocityTachoCounter--;
+        ISR_velocityTachoQuadratureCounter--;
+        ISR_velocityTachoDirection = -1;
     }
     else
     {
-        ISR_velocityTachoCounter++;
+        ISR_velocityTachoQuadratureCounter++;
+        ISR_velocityTachoDirection = 1;
     }
+
+    ISR_velocityTachoCommon();
 }
 
 void ISR_velocityTachoInB(void)
@@ -68,21 +101,27 @@ void ISR_velocityTachoInB(void)
 
     if (ISR_velocityTachoInA_level == ISR_velocityTachoInB_level)
     {
-        ISR_velocityTachoCounter++;
+        ISR_velocityTachoQuadratureCounter++;
+        ISR_velocityTachoDirection = 1;
     }
     else
     {
-        ISR_velocityTachoCounter--;
+        ISR_velocityTachoQuadratureCounter--;
+        ISR_velocityTachoDirection = -1;
     }
-}
+
+    ISR_velocityTachoCommon();}
 
 
 void setup()
 {
     pinMode(velocityTachoInA, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(velocityTachoInA), ISR_velocityTachoInA, CHANGE);
+    ISR_velocityTachoInA_level = HwWrap::GetInstance()->DigitalInput(velocityTachoInA);
+
     pinMode(velocityTachoInB, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(velocityTachoInB), ISR_velocityTachoInB, CHANGE);
+    ISR_velocityTachoInB_level = HwWrap::GetInstance()->DigitalInput(velocityTachoInB);
 
     analogWrite(steeringInATurnRight, 0);
     analogWrite(steeringInBTurnLeft, 0);
@@ -92,9 +131,9 @@ void setup()
 
     velocityPID.SetRangeToIncludeMinusOne(true);
     velocityPID.Init();
-    velocityPID.SetKp(0.4);
-    velocityPID.SetKi(0.6);
-    velocityPID.SetKd(0.02);
+    velocityPID.SetKp(0.60);
+    velocityPID.SetKi(0.22);
+    velocityPID.SetKd(0.56);
     velocityTimer.TimerStart(VELOCITY_TIMER_ONE_TICK_ONLY);
 
     tracker.Init();
@@ -125,6 +164,7 @@ void loop()
     {
         timeStart_SystemTimeTick = millis();
 
+        tachoTimer.TimerTick();
         velocityTimer.TimerTick();
         trackerTimer.TimerTick();
         steeringTimer.TimerTick();
@@ -141,23 +181,54 @@ void loop()
 
     /* Control velocity */
 
+    unsigned velocityTachoQuadratureCounter = ISR_velocityTachoQuadratureCounter;
+
+    if (velocityTachoQuadratureCounter != velocityTachoQuadratureCounterLast)
+    {
+        velocityTachoQuadratureCounterLast = velocityTachoQuadratureCounter;
+        tachoTimer.TimerStart(TACHO_TIMEOUT_PERIOD);
+
+        currentRotationTime_ms = ISR_velocityTachoMagnetTime * VELOCITY_TACHO_NUMBER_OF_MAGNETS;
+        currentVelocity = (float)ISR_velocityTachoDirection * (float)TACHO_MAX_SPEED_ROTATION_TIME / (float)currentRotationTime_ms;
+    }
+    else if (tachoTimer.TimerEvent(TACHO_TIMEOUT_PERIOD) == swTimerEvent_TIMEOUT)
+    {
+        currentRotationTime_ms = TACHO_STOPPED_ROTATION_TIME;
+        currentVelocity = 0.0;
+    }
+
+
     if (velocityTimer.TimerEvent(VELOCITY_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
-        float setPoint = velocity.Update();
+        setPoint = velocity.Update();
+        if (fabs(setPoint) < EPSILON)
+        {
+            velocityPID.ResetInternalValues();
+        }
         velocitySignal = velocityPID.Update(setPoint - currentVelocity);
 
 #ifdef VELOCITY_USE_OUTPUTS
-        if      (velocitySignal > 0.0) velocityOutput.VelocityFwd( velocitySignal);
-        else if (velocitySignal < 0.0) velocityOutput.VelocityBwd(-velocitySignal);
+        if      (velocitySignal > EPSILON) velocityOutput.VelocityFwd( velocitySignal);
+        else if (velocitySignal < EPSILON) velocityOutput.VelocityBwd(-velocitySignal);
         else velocityOutput.VelocityStop();
 #endif
 
+#if defined VELOCITY_USE_DEBUGGING || defined VELOCITY_USE_DEBUGGING_PID
+        {
+            static unsigned prescaler;
+            if (prescaler++ >= 10)
+            {
+                prescaler = 0;
 #ifdef VELOCITY_USE_DEBUGGING
-        velocity.DebugInfo();
+                velocity.DebugInfo();
+#endif
 #ifdef VELOCITY_USE_DEBUGGING_PID
-        velocityPID.DebugInfo();
+                velocityPID.DebugInfo();
 #endif
+            }
+        }
 #endif
+    }
     /* Control steering using the line tracker and a PID regulator */
 
     if (trackerTimer.TimerEvent(TRACKER_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
