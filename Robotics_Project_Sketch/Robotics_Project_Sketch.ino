@@ -24,19 +24,25 @@ static unsigned long ISR_velocityTachoMagnetTimeLast;
 unsigned long timeStart_SystemTimeTick = 0;
 unsigned long timeLimit_SystemTimeTick = SYSTEM_TIME_TICK_BASE;
 
-#define VELOCITY_TACHO_NUMBER_OF_MAGNETS 10
-#define VELOCITY_TACHO_QUADRATURES_PER_MAGNET 4
+#define WHEEL_TACHO_NUMBER_OF_MAGNETS 10
+#define WHEEL_TACHO_QUADRATURES_PER_MAGNET 4
+#define WHEEL_TACHO_QUADRATURES_PER_REVOLUTION (WHEEL_TACHO_NUMBER_OF_MAGNETS * WHEEL_TACHO_QUADRATURES_PER_MAGNET)
+#define WHEEL_TACHO_m_PER_REVOLUTION 0.235
 
-#define VELOCITY_TEST_VELOCITY 0.4
-#define VELOCITY_TEST_RAMP 0.02
+#define VELOCITY_STOP   0.0
+#define VELOCITY_MIN    0.2
+#define VELOCITY_MEDIUM 0.6
+#define VELOCITY_MAX    1.0
+#define VELOCITY_STANDARD_RAMP 0.02
 
 SwTimer tachoTimer;
 #define TACHO_MAX_SPEED_ROTATION_TIME  140 // ~ 429 RPM
 #define TACHO_MIN_SPEED_ROTATION_TIME 3160 // ~  19 RPM
 #define TACHO_STOPPED_ROTATION_TIME 99999
-#define TACHO_TIMEOUT_PERIOD  TACHO_MIN_SPEED_ROTATION_TIME / VELOCITY_TACHO_NUMBER_OF_MAGNETS * 2 * SYSTEM_TIME_ms
+#define TACHO_TIMEOUT_PERIOD  TACHO_MIN_SPEED_ROTATION_TIME / WHEEL_TACHO_NUMBER_OF_MAGNETS * 2 * SYSTEM_TIME_ms
 static volatile unsigned velocityTachoQuadratureCounter;
 static volatile unsigned velocityTachoQuadratureCounterLast;
+static unsigned positionReference;
 
 LineTracker tracker;
 PIDregulator trackerPID;
@@ -64,6 +70,11 @@ float velocitySignal = 0.0;
 #ifdef VELOCITY_USE_OUTPUTS
 HwWrap_VelocityOutput velocityOutput;
 #endif
+
+SwTimer missionControlTimer;
+#define MISSION_CONTROL_TIMER_PERIOD  100 * SYSTEM_TIME_ms
+static unsigned missionControlStep = 0;
+static unsigned missionControlStepLast = 99;
 
 
 void ISR_velocityTachoCommon(void)
@@ -154,8 +165,6 @@ void setup()
     HwWrap::GetInstance()->DebugString("--------------------  Restarted  --------------------");
     HwWrap::GetInstance()->DebugNewLine();
     HwWrap::GetInstance()->DebugNewLine();
-
-    velocity.Set(VELOCITY_TEST_VELOCITY, VELOCITY_TEST_RAMP);
 }
 
 void loop()
@@ -168,6 +177,7 @@ void loop()
         velocityTimer.TimerTick();
         trackerTimer.TimerTick();
         steeringTimer.TimerTick();
+        missionControlTimer.TimerTick();
     }
 
     lineState lineTrackedState;
@@ -179,16 +189,17 @@ void loop()
 
     float lineOffset = lineOffset_CENTER;
 
-    /* Control velocity */
+    /* Velocity control */
+    /* ---------------- */
 
-    unsigned velocityTachoQuadratureCounter = ISR_velocityTachoQuadratureCounter;
+    velocityTachoQuadratureCounter = ISR_velocityTachoQuadratureCounter;
 
     if (velocityTachoQuadratureCounter != velocityTachoQuadratureCounterLast)
     {
         velocityTachoQuadratureCounterLast = velocityTachoQuadratureCounter;
         tachoTimer.TimerStart(TACHO_TIMEOUT_PERIOD);
 
-        currentRotationTime_ms = ISR_velocityTachoMagnetTime * VELOCITY_TACHO_NUMBER_OF_MAGNETS;
+        currentRotationTime_ms = ISR_velocityTachoMagnetTime * WHEEL_TACHO_NUMBER_OF_MAGNETS;
         currentVelocity = (float)ISR_velocityTachoDirection * (float)TACHO_MAX_SPEED_ROTATION_TIME / (float)currentRotationTime_ms;
     }
     else if (tachoTimer.TimerEvent(TACHO_TIMEOUT_PERIOD) == swTimerEvent_TIMEOUT)
@@ -229,7 +240,9 @@ void loop()
         }
 #endif
     }
-    /* Control steering using the line tracker and a PID regulator */
+
+    /* Steering control using the line tracker and a PID regulator */
+    /* ----------------------------------------------------------- */
 
     if (trackerTimer.TimerEvent(TRACKER_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
     {
@@ -272,42 +285,117 @@ void loop()
 #endif
     }
 
+    /* Mission control */
+    /* --------------- */
 
-#ifdef VELOCITY_IN_USE
+    typedef enum
     {
-        aiA0 = ((float)HwWrap::GetInstance()->AnalogInput(0) / ADC_RANGE);
-        if (aiA0 > aiA0_max) aiA0_max = aiA0;
-        if (aiA0 < aiA0_min) aiA0_min = aiA0;
-        aiA0_lim = (aiA0_max+aiA0_min)/2;
+        missionStep_UNDEFINED,
+        missionStep_END,
+        missionStep_TIME,
+        missionStep_DISTANCE,
+    }
+    t_mission_type;
 
-        aiA1 = ((float)HwWrap::GetInstance()->AnalogInput(1) / ADC_RANGE);
-        if (aiA1 > aiA1_max) aiA1_max = aiA1;
-        if (aiA1 < aiA1_min) aiA1_min = aiA1;
-        aiA1_lim = (aiA1_max+aiA1_min)/2;
+    typedef union
+    {
+        unsigned  time_s;
+        float     dist_m;
+    }
+    t_mission_union;
 
-        aiA1A0 = (aiA1 > (aiA1_lim*10)) + (aiA0 > aiA0_lim);
-        if (aiA1A0 != aiA1A0_last)
+    typedef struct
+    {
+        t_mission_type  stepType;
+        float           speed;
+        float           ramp;
+        t_mission_union condition;
+    }
+    t_mission_step;
+
+    static t_mission_step mission[] =
+    {
+        { missionStep_TIME,      VELOCITY_STOP,   VELOCITY_STANDARD_RAMP,  {.time_s = 5    } },
+        { missionStep_DISTANCE,  VELOCITY_MIN,    VELOCITY_STANDARD_RAMP,  {.dist_m = 1.0f } },
+
+        { missionStep_TIME,      VELOCITY_STOP,   VELOCITY_STANDARD_RAMP,  {.time_s = 5    } },
+        { missionStep_DISTANCE,  -VELOCITY_MIN,   VELOCITY_STANDARD_RAMP,  {.dist_m = 1.0f } },
+
+        { missionStep_END,       VELOCITY_STOP,   VELOCITY_STANDARD_RAMP,  {.time_s = 0    } }
+    };
+
+
+    switch (mission[missionControlStep].stepType)
+    {
+        case missionStep_TIME:
         {
-            aiA1A0_last = aiA1A0;
-            HwWrap::GetInstance()->DebugUnsigned( aiA1 > aiA1_lim );
-            HwWrap::GetInstance()->DebugUnsigned( aiA0 > aiA0_lim );
+            if (missionControlStep != missionControlStepLast)
+            {
+                missionControlStepLast = missionControlStep;
 
-            HwWrap::GetInstance()->DebugString("   A1 ");
-            HwWrap::GetInstance()->DebugFloat(aiA1_max);
-            HwWrap::GetInstance()->DebugString("/");
-            HwWrap::GetInstance()->DebugFloat(aiA1_min);
-            HwWrap::GetInstance()->DebugString(" ");
-            HwWrap::GetInstance()->DebugFloat(aiA1);
+                velocity.Set( mission[missionControlStep].speed, mission[missionControlStep].ramp );
+                if (mission[missionControlStep].condition.time_s != 0)
+                {
+                    missionControlTimer.TimerStart( mission[missionControlStep].condition.time_s * SYSTEM_TIME_sec );
+                }
+                else
+                {
+                    missionControlTimer.TimerStop();
+                }
+            }
 
-            HwWrap::GetInstance()->DebugString("   A2 ");
-            HwWrap::GetInstance()->DebugFloat(aiA0_max);
-            HwWrap::GetInstance()->DebugString("/");
-            HwWrap::GetInstance()->DebugFloat(aiA0_min);
-            HwWrap::GetInstance()->DebugString(" ");
-            HwWrap::GetInstance()->DebugFloat(aiA0);
-
-            HwWrap::GetInstance()->DebugNewLine();
+            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+            {
+                missionControlStep++;
+            }
         }
+        break;
+
+        case missionStep_DISTANCE:
+        {
+            if (missionControlStep != missionControlStepLast)
+            {
+                missionControlStepLast = missionControlStep;
+
+                unsigned distanceInQuadratureCounts = round( (mission[missionControlStep].condition.dist_m / WHEEL_TACHO_m_PER_REVOLUTION) * WHEEL_TACHO_QUADRATURES_PER_REVOLUTION );
+
+                velocity.Set( mission[missionControlStep].speed, mission[missionControlStep].ramp );
+
+                if (mission[missionControlStep].speed > EPSILON)
+                {
+                    positionReference = velocityTachoQuadratureCounter + distanceInQuadratureCounts;
+                }
+                else if (mission[missionControlStep].speed < EPSILON)
+                {
+                    positionReference = velocityTachoQuadratureCounter - distanceInQuadratureCounts;
+                }
+            }
+
+            if (mission[missionControlStep].speed > EPSILON)
+            {
+                if (velocityTachoQuadratureCounter >= positionReference)
+                {
+                    missionControlStep++;
+                }
+            }
+            else if (mission[missionControlStep].speed < EPSILON)
+            {
+                if (velocityTachoQuadratureCounter <= positionReference)
+                {
+                    missionControlStep++;
+                }
+            }
+        }
+        break;
+
+        case missionStep_END:
+        {
+            if (missionControlStep != missionControlStepLast)
+            {
+                velocity.Set( VELOCITY_STOP, VELOCITY_STANDARD_RAMP );
+            }
+        }
+        break;
     }
 #endif /* VELOCITY_IN_USE */
 }

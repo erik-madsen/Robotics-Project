@@ -43,13 +43,23 @@ float VelocityControl::Update
 )
 //  --------------------------------------------------------------------------------
 {
-    if (velocityCurrentValue < velocityRequested - velocityRampRequested/2)
+    if (velocityCurrentValue < velocityRequested)
     {
         velocityCurrentValue += velocityRampRequested;
+
+        if (velocityCurrentValue > velocityRequested)
+        {
+            velocityCurrentValue = velocityRequested;
+        }
     }
-    else if (velocityCurrentValue > velocityRequested + velocityRampRequested/2)
+    else if (velocityCurrentValue > velocityRequested)
     {
         velocityCurrentValue -= velocityRampRequested;
+
+        if (velocityCurrentValue < velocityRequested)
+        {
+            velocityCurrentValue = velocityRequested;
+        }
     }
     return velocityCurrentValue;
 }
