@@ -200,7 +200,15 @@ void loop()
         tachoTimer.TimerStart(TACHO_TIMEOUT_PERIOD);
 
         currentRotationTime_ms = ISR_velocityTachoMagnetTime * WHEEL_TACHO_NUMBER_OF_MAGNETS;
-        currentVelocity = (float)ISR_velocityTachoDirection * (float)TACHO_MAX_SPEED_ROTATION_TIME / (float)currentRotationTime_ms;
+        if (currentRotationTime_ms != 0)
+        {
+            currentVelocity = (float)ISR_velocityTachoDirection * (float)TACHO_MAX_SPEED_ROTATION_TIME / (float)currentRotationTime_ms;
+        }
+        else
+        {
+            currentRotationTime_ms = TACHO_STOPPED_ROTATION_TIME;
+            currentVelocity = 0.0;
+        }
     }
     else if (tachoTimer.TimerEvent(TACHO_TIMEOUT_PERIOD) == swTimerEvent_TIMEOUT)
     {
