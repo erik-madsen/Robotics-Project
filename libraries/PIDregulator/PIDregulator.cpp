@@ -205,14 +205,32 @@ void PIDregulator::DebugInfo
 )
 //  --------------------------------------------------------------------------------
 {
-    HwWrap::GetInstance()->DebugString(" PID:  ");
+    HwWrap::GetInstance()->DebugString(" \t PID:  ");
+
     HwWrap::GetInstance()->DebugString("error ");
     if (errorLast >= 0.0)
         HwWrap::GetInstance()->DebugString(" ");
     HwWrap::GetInstance()->DebugFloat(errorLast);
+
+    HwWrap::GetInstance()->DebugString("  p ");
+    if (pTerm >= 0.0)
+        HwWrap::GetInstance()->DebugString(" ");
+    HwWrap::GetInstance()->DebugFloat(pTerm);
+
+    HwWrap::GetInstance()->DebugString("  i ");
+    if (iTerm >= 0.0)
+        HwWrap::GetInstance()->DebugString(" ");
+    HwWrap::GetInstance()->DebugFloat(iTerm);
+
+    HwWrap::GetInstance()->DebugString("  d ");
+    if (dTerm >= 0.0)
+        HwWrap::GetInstance()->DebugString(" ");
+    HwWrap::GetInstance()->DebugFloat(dTerm);
+
     HwWrap::GetInstance()->DebugString("  output ");
     if (output >= 0.0)
         HwWrap::GetInstance()->DebugString(" ");
     HwWrap::GetInstance()->DebugFloat(output);
+
     HwWrap::GetInstance()->DebugNewLine();
 }

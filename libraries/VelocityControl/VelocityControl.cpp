@@ -81,5 +81,7 @@ void VelocityControl::DebugInfo
         HwWrap::GetInstance()->DebugString(" ");
     HwWrap::GetInstance()->DebugFloat(velocityCurrentValue);
 
+#ifndef VELOCITY_USE_DEBUGGING_PID
     HwWrap::GetInstance()->DebugNewLine();
+#endif
 }
