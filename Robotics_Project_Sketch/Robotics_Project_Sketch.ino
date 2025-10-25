@@ -13,7 +13,7 @@
 
 static volatile unsigned ISR_velocityTachoInA_level;
 static volatile unsigned ISR_velocityTachoInB_level;
-static volatile unsigned ISR_velocityTachoQuadratureCounter;
+static volatile long int ISR_velocityTachoQuadratureCounter;
 static volatile int ISR_velocityTachoDirection;
 static unsigned long ISR_velocityTachoMagnetTime;
 static unsigned long ISR_velocityTachoMagnetTimeLast;
@@ -24,27 +24,57 @@ static unsigned long ISR_velocityTachoMagnetTimeLast;
 unsigned long timeStart_SystemTimeTick = 0;
 unsigned long timeLimit_SystemTimeTick = SYSTEM_TIME_TICK_BASE;
 
+
+/* Velocity and position control */
+
 #define WHEEL_TACHO_NUMBER_OF_MAGNETS 10
 #define WHEEL_TACHO_QUADRATURES_PER_MAGNET 4
 #define WHEEL_TACHO_QUADRATURES_PER_REVOLUTION (WHEEL_TACHO_NUMBER_OF_MAGNETS * WHEEL_TACHO_QUADRATURES_PER_MAGNET)
-#define WHEEL_TACHO_m_PER_REVOLUTION 0.235
-
-#define VELOCITY_STOP   0.0
-#define VELOCITY_MIN    0.2
-#define VELOCITY_MEDIUM 0.6
-#define VELOCITY_MAX    1.0
-#define VELOCITY_STANDARD_RAMP 0.04
-#define VELOCITY_NO_RAMP       1.0
-#define VELOCITY_DIRECT_OUTPUT 0.30
+#define WHEEL_TACHO_mm_per_rev 235
 
 SwTimer tachoTimer;
-#define TACHO_MAX_SPEED_ROTATION_TIME  140 // ~ 429 RPM
-#define TACHO_MIN_SPEED_ROTATION_TIME 1100 // ~  55 RPM
+#define TACHO_MIN_SPEED_ROTATION_TIME_ms  1100  // ~  55 RPM  ~ 0.215 m/s ~ 0.8 km/h
+#define TACHO_MAX_SPEED_ROTATION_TIME_ms   140  // ~ 429 RPM  ~ 1.680 m/s ~ 6.0 km/h
+#define TACHO_MAX_SPEED_RPM               ((60UL*1000UL)/TACHO_MAX_SPEED_ROTATION_TIME_ms)
+#define TACHO_MAX_SPEED_m_per_s           ((TACHO_MAX_SPEED_RPM * WHEEL_TACHO_mm_per_rev) / 60.0f / 1000.0f)
 #define TACHO_STOPPED_ROTATION_TIME 99999
-#define TACHO_TIMEOUT_PERIOD  TACHO_MIN_SPEED_ROTATION_TIME / WHEEL_TACHO_NUMBER_OF_MAGNETS * 2 * SYSTEM_TIME_ms
-static volatile unsigned velocityTachoQuadratureCounter;
-static volatile unsigned velocityTachoQuadratureCounterLast;
-static unsigned positionReference;
+#define TACHO_TIMEOUT_TIMER_TICKS  (2 * TACHO_MIN_SPEED_ROTATION_TIME_ms / WHEEL_TACHO_NUMBER_OF_MAGNETS * SYSTEM_TIME_ms)
+static volatile long int velocityTachoQuadratureCounter;
+static volatile long int velocityTachoQuadratureCounterLast;
+
+VelocityControl velocity;
+SwTimer velocityTimer;
+#define VELOCITY_UPDATE_TIME_ms 20
+#define VELOCITY_TIMER_ONE_TICK_ONLY 1
+#define VELOCITY_TIMER_TICKS  (VELOCITY_UPDATE_TIME_ms * SYSTEM_TIME_ms)
+bool velocityControlEnabled;
+float velocitySetPoint;
+unsigned long currentRotationTime_ms = TACHO_STOPPED_ROTATION_TIME;
+float currentVelocity = 0.0;
+
+#ifdef VELOCITY_USE_OUTPUTS
+HwWrap_VelocityOutput velocityOutput;
+#endif
+
+PIDregulator velocityPID;
+#define VELOCITY_PID_KP 0.80
+#define VELOCITY_PID_KI 0.10
+#define VELOCITY_PID_KD 0.00
+float velocitySignal = 0.0;
+SwTimer velocityPidTimer;
+#define VELOCITY_PID_TIMER_ONE_TICK_ONLY 1
+#define VELOCITY_PID_TIMER_TICKS  (60 * SYSTEM_TIME_ms)
+
+#define VELOCITY_STOP    0.0f
+#define VELOCITY_MIN    (0.2f * TACHO_MAX_SPEED_m_per_s)
+#define VELOCITY_MEDIUM (0.6f * TACHO_MAX_SPEED_m_per_s)
+#define VELOCITY_MAX    (1.0f * TACHO_MAX_SPEED_m_per_s)
+#define VELOCITY_ACCEL_STANDARD  3.36  // m/(s^2)
+#define VELOCITY_ACCEL_MAX       999.0
+#define VELOCITY_DIRECT_OUTPUT 0.30
+
+
+/* Steering control using the line tracker and a PID regulator */
 
 LineTracker tracker;
 PIDregulator trackerPID;
@@ -53,47 +83,33 @@ PIDregulator trackerPID;
 #define TRACKER_PID_KD 0.00  // 2.0
 SwTimer trackerTimer;
 #define TRACKER_TIMER_ONE_TICK_ONLY 1
-#define TRACKER_TIMER_PERIOD  600 * SYSTEM_TIME_ms
+#define TRACKER_TIMER_TICKS  (600 * SYSTEM_TIME_ms)
 
 WheelSteering steering;
 SwTimer steeringTimer;
 #define STEERING_TIMER_ONE_TICK_ONLY 1
-#define STEERING_TIMER_PERIOD  50 * SYSTEM_TIME_ms
+#define STEERING_TIMER_TICKS  (50 * SYSTEM_TIME_ms)
 float steeringSignal = 0.0;
 
-VelocityControl velocity;
-SwTimer velocityTimer;
-#define VELOCITY_TIMER_ONE_TICK_ONLY 1
-#define VELOCITY_TIMER_PERIOD  20 * SYSTEM_TIME_ms
-bool velocityControlEnabled;
-float velocitySetPoint;
-unsigned long currentRotationTime_ms;
-float currentVelocity = 0.0;
 
-PIDregulator velocityPID;
-#define VELOCITY_PID_KP 0.50
-#define VELOCITY_PID_KI 0.17
-#define VELOCITY_PID_KD 0.00
-float velocitySignal = 0.0;
-SwTimer velocityPidTimer;
-#define VELOCITY_PID_TIMER_ONE_TICK_ONLY 1
-#define VELOCITY_PID_TIMER_PERIOD  60 * SYSTEM_TIME_ms
+/* Mission control */
+
+SwTimer missionControlTimer;
+#define MISSION_CONTROL_TIMER_TICKS  (100 * SYSTEM_TIME_ms)
+static unsigned missionControlStep = 0;
+static unsigned missionControlStepLast = 99;
+static long int currentPosition_mm;
+static long int missionPositionReference_mm;
+
+
+/* Miscellaneous */
 
 #ifdef USE_STATUS_OVERVIEW
 SwTimer statusOverviewTimer;
 #define STATUS_OVERVIEW_TIMER_ONE_TICK_ONLY 1
-#define STATUS_OVERVIEW_TIMER_PERIOD  1 * SYSTEM_TIME_sec
+#define STATUS_OVERVIEW_TIMER_TICKS  (1 * SYSTEM_TIME_sec)
 bool statusOverviewEnabled;
 #endif
-
-#ifdef VELOCITY_USE_OUTPUTS
-HwWrap_VelocityOutput velocityOutput;
-#endif
-
-SwTimer missionControlTimer;
-#define MISSION_CONTROL_TIMER_PERIOD  100 * SYSTEM_TIME_ms
-static unsigned missionControlStep = 0;
-static unsigned missionControlStepLast = 99;
 
 
 void ISR_velocityTachoCommon(void)
@@ -220,22 +236,24 @@ void loop()
 
     float lineOffset = lineOffset_CENTER;
 
-    /* Velocity control */
-    /* ---------------- */
+    /* Velocity and position control */
+    /* ----------------------------- */
 
     velocityTachoQuadratureCounter = ISR_velocityTachoQuadratureCounter;
+    currentPosition_mm = (velocityTachoQuadratureCounter * WHEEL_TACHO_mm_per_rev) / WHEEL_TACHO_QUADRATURES_PER_REVOLUTION;
+
 
     // Determine the current velocity
 
     if (velocityTachoQuadratureCounter != velocityTachoQuadratureCounterLast)
     {
         velocityTachoQuadratureCounterLast = velocityTachoQuadratureCounter;
-        tachoTimer.TimerStart(TACHO_TIMEOUT_PERIOD);
+        tachoTimer.TimerStart(TACHO_TIMEOUT_TIMER_TICKS);
 
         currentRotationTime_ms = ISR_velocityTachoMagnetTime * WHEEL_TACHO_NUMBER_OF_MAGNETS;
         if (currentRotationTime_ms != 0)
         {
-            currentVelocity = (float)ISR_velocityTachoDirection * (float)TACHO_MAX_SPEED_ROTATION_TIME / (float)currentRotationTime_ms;
+            currentVelocity = (float)ISR_velocityTachoDirection * (float)TACHO_MAX_SPEED_ROTATION_TIME_ms / (float)currentRotationTime_ms;
         }
         else
         {
@@ -243,7 +261,7 @@ void loop()
             currentVelocity = 0.0;
         }
     }
-    else if (tachoTimer.TimerEvent(TACHO_TIMEOUT_PERIOD) == swTimerEvent_TIMEOUT)
+    else if (tachoTimer.TimerEvent(TACHO_TIMEOUT_TIMER_TICKS) == swTimerEvent_TIMEOUT)
     {
         currentRotationTime_ms = TACHO_STOPPED_ROTATION_TIME;
         currentVelocity = 0.0;
@@ -251,17 +269,17 @@ void loop()
 
     // Determine the requested velocity
 
-    if (velocityTimer.TimerEvent(VELOCITY_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+    if (velocityTimer.TimerEvent(VELOCITY_TIMER_TICKS) == swTimerEvent_TIMEOUT)
     {
         velocitySetPoint = velocity.Update();
 
-        if (EPSILON < velocitySetPoint && velocitySetPoint < VELOCITY_MIN)
+        if (EPSILON < velocitySetPoint && velocitySetPoint < VELOCITY_MIN / TACHO_MAX_SPEED_m_per_s)
         {
-            velocitySetPoint = VELOCITY_MIN;
+            velocitySetPoint = VELOCITY_MIN / TACHO_MAX_SPEED_m_per_s;
         }
-        if (-VELOCITY_MIN < velocitySetPoint && velocitySetPoint < -EPSILON)
+        if (-VELOCITY_MIN / TACHO_MAX_SPEED_m_per_s < velocitySetPoint && velocitySetPoint < -EPSILON)
         {
-            velocitySetPoint = -VELOCITY_MIN;
+            velocitySetPoint = -VELOCITY_MIN / TACHO_MAX_SPEED_m_per_s;
         }
     }
 
@@ -269,7 +287,7 @@ void loop()
 
     if (velocityControlEnabled)
     {
-        if (velocityPidTimer.TimerEvent(VELOCITY_PID_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+        if (velocityPidTimer.TimerEvent(VELOCITY_PID_TIMER_TICKS) == swTimerEvent_TIMEOUT)
         {
             if (fabs(velocitySetPoint) < EPSILON)
             {
@@ -305,7 +323,7 @@ void loop()
     /* Steering control using the line tracker and a PID regulator */
     /* ----------------------------------------------------------- */
 
-    if (trackerTimer.TimerEvent(TRACKER_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+    if (trackerTimer.TimerEvent(TRACKER_TIMER_TICKS) == swTimerEvent_TIMEOUT)
     {
         tracker.Update(&lineTrackedState, &trackedPosition);
         steeringSignal = trackerPID.Update(lineOffset - trackedPosition);
@@ -337,7 +355,7 @@ void loop()
     }
 
 
-    if (steeringTimer.TimerEvent(STEERING_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+    if (steeringTimer.TimerEvent(STEERING_TIMER_TICKS) == swTimerEvent_TIMEOUT)
     {
         steering.Update();
 
@@ -352,11 +370,11 @@ void loop()
     typedef enum
     {
         missionStep_UNDEFINED,
-        missionStep_END,
         missionStep_VELOCITY_DIRECT_OUTPUT,
         missionStep_PAUSE,
         missionStep_TIME,
         missionStep_DISTANCE,
+        missionStep_END
     }
     t_mission_type;
 
@@ -371,7 +389,7 @@ void loop()
     typedef union
     {
         unsigned  dummy;
-        float     ramp;
+        float     accel;
     }
     t_mission_param_2;
 
@@ -394,33 +412,35 @@ void loop()
 
     static t_mission_step mission[] =
     {
-        { missionStep_PAUSE,                    { .speed  =  VELOCITY_STOP          },   { .ramp  =  VELOCITY_NO_RAMP      },   { .time_s = 3    }  },
-        { missionStep_VELOCITY_DIRECT_OUTPUT,   { .output =  VELOCITY_DIRECT_OUTPUT },   { .dummy =  0                     },   { .time_s = 2    }  },
-        { missionStep_PAUSE,                    { .speed  =  VELOCITY_STOP          },   { .ramp  =  VELOCITY_NO_RAMP      },   { .time_s = 3    }  },
-        { missionStep_VELOCITY_DIRECT_OUTPUT,   { .output = -VELOCITY_DIRECT_OUTPUT },   { .dummy =  0                     },   { .time_s = 2    }  },
+        { missionStep_PAUSE,                    { .dummy  =  0                      },   { .accel = VELOCITY_ACCEL_STANDARD },   { .time_s = 3    }  },
 
-        { missionStep_PAUSE,                    { .speed  =   VELOCITY_STOP         },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 3    }  },
-        { missionStep_DISTANCE,                 { .speed  =   VELOCITY_MIN          },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .dist_m = 1.5f }  },
-        { missionStep_PAUSE,                    { .speed  =   VELOCITY_STOP         },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 3    }  },
-        { missionStep_DISTANCE,                 { .speed  =  -VELOCITY_MIN          },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .dist_m = 1.5f }  },
+        { missionStep_VELOCITY_DIRECT_OUTPUT,   { .output =  VELOCITY_DIRECT_OUTPUT },   { .dummy = 0                       },   { .time_s = 2    }  },
+        { missionStep_VELOCITY_DIRECT_OUTPUT,   { .output =  0.0                    },   { .dummy = 0                       },   { .time_s = 3    }  },
+        { missionStep_VELOCITY_DIRECT_OUTPUT,   { .output = -VELOCITY_DIRECT_OUTPUT },   { .dummy = 0                       },   { .time_s = 2    }  },
+        { missionStep_VELOCITY_DIRECT_OUTPUT,   { .output =  0.0                    },   { .dummy = 0                       },   { .time_s = 3    }  },
 
-        { missionStep_PAUSE,                    { .speed  =   VELOCITY_STOP         },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 3    }  },
-        { missionStep_DISTANCE,                 { .speed  =   VELOCITY_MEDIUM       },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .dist_m = 1.5f }  },
-        { missionStep_PAUSE,                    { .speed  =   VELOCITY_STOP         },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 3    }  },
-        { missionStep_DISTANCE,                 { .speed  =  -VELOCITY_MEDIUM       },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .dist_m = 1.5f }  },
 
-        { missionStep_PAUSE,                    { .speed  =   VELOCITY_STOP         },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 3    }  },
-        { missionStep_TIME,                     { .speed  =   VELOCITY_MAX          },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 1    }  },
-        { missionStep_PAUSE,                    { .speed  =   VELOCITY_STOP         },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 3    }  },
-        { missionStep_TIME,                     { .speed  =  -VELOCITY_MAX          },   { .ramp  = VELOCITY_STANDARD_RAMP },   { .time_s = 1    }  },
+        { missionStep_DISTANCE,                 { .speed  =  VELOCITY_MEDIUM        },   { .accel = VELOCITY_ACCEL_MAX      },   { .dist_m = 1.5f }  },
+        { missionStep_PAUSE,                    { .dummy  =  0                      },   { .accel = VELOCITY_ACCEL_MAX      },   { .time_s = 3    }  },
+        { missionStep_DISTANCE,                 { .speed  = -VELOCITY_MEDIUM        },   { .accel = VELOCITY_ACCEL_MAX      },   { .dist_m = 1.5f }  },
+        { missionStep_PAUSE,                    { .dummy  =  0                      },   { .accel = VELOCITY_ACCEL_MAX      },   { .time_s = 3    }  },
 
-        { missionStep_END,                      { .dummy  =  0                      },   { .dummy = 0                      },   { .dummy  = 0    }  }
+        { missionStep_DISTANCE,                 { .speed  =  VELOCITY_MEDIUM        },   { .accel = VELOCITY_ACCEL_STANDARD },   { .dist_m = 1.5f }  },
+        { missionStep_PAUSE,                    { .dummy  =  0                      },   { .accel = VELOCITY_ACCEL_STANDARD },   { .time_s = 3    }  },
+        { missionStep_DISTANCE,                 { .speed  = -VELOCITY_MEDIUM        },   { .accel = VELOCITY_ACCEL_STANDARD },   { .dist_m = 1.5f }  },
+        { missionStep_PAUSE,                    { .dummy  =  0                      },   { .accel = VELOCITY_ACCEL_STANDARD },   { .time_s = 3    }  },
+
+
+        { missionStep_END,                      { .dummy  =  0                      },   { .dummy = 0                       },   { .dummy  = 0    }  }
     };
 
 
     switch (mission[missionControlStep].stepType)
     {
         case missionStep_VELOCITY_DIRECT_OUTPUT:
+        // ----------------------------------------
+        // Simply run the vehicle by directly setting the control output, thereby eliminating any speed control.
+        // ----------------------------------------
         {
             if (missionControlStep != missionControlStepLast)
             {
@@ -440,7 +460,7 @@ void loop()
                 missionControlTimer.TimerStart( mission[missionControlStep].param_3.time_s * SYSTEM_TIME_sec );
             }
 
-            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_TICKS) == swTimerEvent_TIMEOUT)
             {
                 missionControlTimer.TimerStop();
                 missionControlStep++;
@@ -449,6 +469,9 @@ void loop()
         break;
 
         case missionStep_PAUSE:
+        // ----------------------------------------
+        // Make sure the vehicle is stopped, and stay at this step for an amount of time
+        // ----------------------------------------
         {
             if (missionControlStep != missionControlStepLast)
             {
@@ -461,11 +484,11 @@ void loop()
                 statusOverviewEnabled = true;
 #endif
 
-                velocity.Set( mission[missionControlStep].param_1.speed, mission[missionControlStep].param_2.ramp );
+                velocity.Set( mission[missionControlStep].param_1.speed / TACHO_MAX_SPEED_m_per_s, mission[missionControlStep].param_2.accel * VELOCITY_UPDATE_TIME_ms / 1000 );
                 missionControlTimer.TimerStart( mission[missionControlStep].param_3.time_s * SYSTEM_TIME_sec );
             }
 
-            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_TICKS) == swTimerEvent_TIMEOUT)
             {
                 missionControlTimer.TimerStop();
                 missionControlStep++;
@@ -474,6 +497,9 @@ void loop()
         break;
 
         case missionStep_TIME:
+        // ----------------------------------------
+        // Run the vehicle for an amount of time
+        // ----------------------------------------
         {
             if (missionControlStep != missionControlStepLast)
             {
@@ -486,11 +512,11 @@ void loop()
                 statusOverviewEnabled = true;
 #endif
 
-                velocity.Set( mission[missionControlStep].param_1.speed, mission[missionControlStep].param_2.ramp );
+                velocity.Set( mission[missionControlStep].param_1.speed / TACHO_MAX_SPEED_m_per_s, mission[missionControlStep].param_2.accel * VELOCITY_UPDATE_TIME_ms / 1000 );
                 missionControlTimer.TimerStart( mission[missionControlStep].param_3.time_s * SYSTEM_TIME_sec );
             }
 
-            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_TICKS) == swTimerEvent_TIMEOUT)
             {
                 missionControlTimer.TimerStop();
                 missionControlStep++;
@@ -499,6 +525,9 @@ void loop()
         break;
 
         case missionStep_DISTANCE:
+        // ----------------------------------------
+        // Run the vehicle a certain distance and stop there
+        // ----------------------------------------
         {
             if (missionControlStep != missionControlStepLast)
             {
@@ -511,30 +540,28 @@ void loop()
                 statusOverviewEnabled = true;
 #endif
 
-                unsigned distanceInQuadratureCounts = round( (mission[missionControlStep].param_3.dist_m / WHEEL_TACHO_m_PER_REVOLUTION) * WHEEL_TACHO_QUADRATURES_PER_REVOLUTION );
+                velocity.Set( mission[missionControlStep].param_1.speed / TACHO_MAX_SPEED_m_per_s, mission[missionControlStep].param_2.accel * VELOCITY_UPDATE_TIME_ms / 1000 );
 
-                velocity.Set( mission[missionControlStep].param_1.speed, mission[missionControlStep].param_2.ramp );
-
-                if (mission[missionControlStep].param_1.speed > EPSILON)
+                if (mission[missionControlStep].param_1.speed / TACHO_MAX_SPEED_m_per_s > EPSILON)
                 {
-                    positionReference = velocityTachoQuadratureCounter + distanceInQuadratureCounts;
+                    missionPositionReference_mm = currentPosition_mm + mission[missionControlStep].param_3.dist_m * 1000;
                 }
-                else if (mission[missionControlStep].param_1.speed < EPSILON)
+                else if (mission[missionControlStep].param_1.speed / TACHO_MAX_SPEED_m_per_s < EPSILON)
                 {
-                    positionReference = velocityTachoQuadratureCounter - distanceInQuadratureCounts;
+                    missionPositionReference_mm = currentPosition_mm - mission[missionControlStep].param_3.dist_m * 1000;
                 }
             }
 
-            if (mission[missionControlStep].param_1.speed > EPSILON)
+            if (mission[missionControlStep].param_1.speed / TACHO_MAX_SPEED_m_per_s > EPSILON)
             {
-                if (velocityTachoQuadratureCounter >= positionReference)
+                if (currentPosition_mm >= missionPositionReference_mm)
                 {
                     missionControlStep++;
                 }
             }
-            else if (mission[missionControlStep].param_1.speed < EPSILON)
+            else if (mission[missionControlStep].param_1.speed / TACHO_MAX_SPEED_m_per_s < EPSILON)
             {
-                if (velocityTachoQuadratureCounter <= positionReference)
+                if (currentPosition_mm <= missionPositionReference_mm)
                 {
                     missionControlStep++;
                 }
@@ -542,22 +569,39 @@ void loop()
         }
         break;
 
+        default:
         case missionStep_END:
+        // ----------------------------------------
+        // Last step of a mission. Execution will stay in this step forever.
+        // ----------------------------------------
         {
             if (missionControlStep != missionControlStepLast)
             {
+                missionControlStepLast = missionControlStep;
+
+                // Mission step entry
+
 #ifdef USE_STATUS_OVERVIEW
-                statusOverviewEnabled = false;
+                // Still keep the status overview running for a short while
+                missionControlTimer.TimerStart( 5 * STATUS_OVERVIEW_TIMER_TICKS );
 #endif
                 if (velocityControlEnabled)
                 {
-                    velocity.Set( VELOCITY_STOP, VELOCITY_STANDARD_RAMP );
+                    velocity.Set( VELOCITY_STOP, VELOCITY_ACCEL_STANDARD * VELOCITY_UPDATE_TIME_ms / 1000 );
                 }
                 else
                 {
                     velocityOutput.VelocityStop();
                 }
             }
+
+#ifdef USE_STATUS_OVERVIEW
+            if (missionControlTimer.TimerEvent(MISSION_CONTROL_TIMER_TICKS) == swTimerEvent_TIMEOUT)
+            {
+                missionControlTimer.TimerStop();
+                statusOverviewEnabled = false;
+            }
+#endif
         }
         break;
     }
@@ -567,7 +611,7 @@ void loop()
 
 #ifdef USE_STATUS_OVERVIEW
     if (statusOverviewEnabled)
-    if (statusOverviewTimer.TimerEvent(STATUS_OVERVIEW_TIMER_PERIOD) == swTimerEvent_TIMEOUT)
+    if (statusOverviewTimer.TimerEvent(STATUS_OVERVIEW_TIMER_TICKS) == swTimerEvent_TIMEOUT)
     {
         unsigned velocityQuadratureCounter;
         static unsigned header_prescaler = 2;
@@ -577,12 +621,12 @@ void loop()
         if (header_prescaler-- == 0)
         {
             header_prescaler = 10;
-            HwWrap::GetInstance()->DebugString("step \t setp. \t signal \t [ms] ~ RPM \t \t ref. \t pos.");
+            HwWrap::GetInstance()->DebugString("step \t setp. \t signal \t [ms]  ~ RPM   ~ [m/s] \t \t ref. \t pos.");
             HwWrap::GetInstance()->DebugNewLine();
         }
 
         HwWrap::GetInstance()->DebugUnsigned(missionControlStep);
-        HwWrap::GetInstance()->DebugString(" \t ");
+        HwWrap::GetInstance()->DebugString("\t ");
 
         // Regulation information
 
@@ -602,16 +646,18 @@ void loop()
         {
             HwWrap::GetInstance()->DebugUnsigned(currentRotationTime_ms);
         }
-        HwWrap::GetInstance()->DebugString(" \t");
+        HwWrap::GetInstance()->DebugString("\t ");
         HwWrap::GetInstance()->DebugUnsigned((unsigned long)60*1000/currentRotationTime_ms);  // RPM
-        HwWrap::GetInstance()->DebugString(" \t ");
-        HwWrap::GetInstance()->DebugString(" \t ");
+        HwWrap::GetInstance()->DebugString("\t ");
+        HwWrap::GetInstance()->DebugFloat((( ((unsigned long)60*1000/currentRotationTime_ms) * WHEEL_TACHO_mm_per_rev) / 60.0f / 1000.0f));  // Speed
+        HwWrap::GetInstance()->DebugString("\t ");
+        HwWrap::GetInstance()->DebugString("\t ");
 
         // Position information
 
-        HwWrap::GetInstance()->DebugUnsigned(positionReference);
-        HwWrap::GetInstance()->DebugString(" \t ");
-        HwWrap::GetInstance()->DebugUnsigned(velocityTachoQuadratureCounter);
+        HwWrap::GetInstance()->DebugLong(missionPositionReference_mm);
+        HwWrap::GetInstance()->DebugString("\t ");
+        HwWrap::GetInstance()->DebugLong(currentPosition_mm);
         HwWrap::GetInstance()->DebugNewLine();
     }
 #endif /* USE_STATUS_OVERVIEW */

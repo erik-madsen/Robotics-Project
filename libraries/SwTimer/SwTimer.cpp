@@ -23,11 +23,11 @@ SwTimer::SwTimer
 void SwTimer::TimerStart
 //  --------------------------------------------------------------------------------
 (
-    unsigned timeValue
+    unsigned timerTicks
 )
 //  --------------------------------------------------------------------------------
 {
-    timer = timeValue;
+    timer = timerTicks;
 }
 
 void SwTimer::TimerStop

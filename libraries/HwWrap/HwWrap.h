@@ -37,6 +37,8 @@ class HwWrap
 
         void DebugString(const char *string);
         void DebugUnsigned(unsigned value);
+        void DebugInt(int value);
+        void DebugLong(long value);
         void DebugFloat(float value);
         void DebugNewLine(void);
 
